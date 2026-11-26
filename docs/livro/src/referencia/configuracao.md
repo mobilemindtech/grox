@@ -263,6 +263,7 @@ Tudo sob `hibernate.*` é repassado ao Hibernate. Chaves que o Grox define ou tr
 | Chave | Padrão | Descrição |
 |---|---|---|
 | `grails.serverURL` | | Base dos links com `absolute: true` e das URLs relativas do PDF (plugin rendering) |
+| `grox.rendering.allowedUrls` | `[]` | Prefixos de URL que os templates de PDF podem buscar, além da origem do `base` e de `data:` *(extensão Grox)* |
 | `grails.databinding.dateFormats` | | Lista de formatos de `Date` aceitos no binding, tentados na ordem e sem leniência. Os formatos ISO do Grox continuam valendo depois deles |
 | `grails.scaffolding.templates.domainSuffix` | `''` | Sufixo dos nomes do modelo do `respond` (`Instance` gera `usuarioInstance`, `usuarioInstanceList`) |
 | `grails.codegen.defaultPackage` | | Pacote da app, aceito na leitura da sessão do Redis |

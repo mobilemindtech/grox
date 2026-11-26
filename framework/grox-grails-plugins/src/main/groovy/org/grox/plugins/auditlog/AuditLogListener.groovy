@@ -96,7 +96,7 @@ class AuditLogListener extends AbstractPersistenceEventListener {
     private static void queue(Auditable domain, Map params) {
         Object audit = AuditLogPlugin.auditDomainClass.getDeclaredConstructor().newInstance()
         params.each { k, v -> if (audit.hasProperty((String) k)) audit[(String) k] = v }
-        if (domain.beforeSaveLog(audit)) AuditLogPlugin.enqueue(audit)
+        if (domain.beforeSaveLog(audit)) AuditLogPlugin.enqueue(audit, AuditLogPlugin.tenantFor(domain))
     }
 
     private static Long versionOf(Object domain, Map newMap, Map oldMap) {

@@ -927,7 +927,7 @@ pdfRenderingService.render([template: '/recibo/recibo', model: m], outputStream)
 renderPdf(template: 'recibo', model: [conta: c])                 // no controller: template relativo a ele
 ```
 
-O template precisa ser XHTML bem formado. `base` (ou `grails.serverURL`) resolve URLs relativas de imagens e CSS. Imagens em bytes vão embutidas com `<rendering:inlinePng bytes="${logo}" height="66px"/>` (também `inlineJpeg` e `inlineGif`); os demais atributos vão para o `<img>`. Renderizar GIF, PNG e JPEG como saída ❌.
+O template precisa ser XHTML bem formado. `base` (ou `grails.serverURL`) resolve URLs relativas de imagens e CSS. Os recursos só são buscados na origem do `base`, em `data:` e nos prefixos de `grox.rendering.allowedUrls` (sem SSRF por URL vinda do usuário). Imagens em bytes vão embutidas com `<rendering:inlinePng bytes="${logo}" height="66px"/>` (também `inlineJpeg` e `inlineGif`); os demais atributos vão para o `<img>`. Renderizar GIF, PNG e JPEG como saída ❌.
 
 ## Exportação Excel (plugin excel-export)
 
@@ -1482,6 +1482,7 @@ Na aplicação: `grailsApplication.config.getProperty('api.base')`, `config.getP
 | `grox.static.dir` | `src/main/resources/public` | |
 | `grails.serverURL` | | Base para links com `absolute: true` |
 | `grox.serverURL` | | O mesmo, para os links das rotas do `grox-dsl` (que não leem `grails.serverURL`) |
+| `grox.rendering.allowedUrls` | `[]` | Prefixos de URL que os templates de PDF podem buscar, além do próprio servidor e de `data:` |
 | `grails.sitemesh.default.layout` | | Layout padrão |
 | `grox.session.store` | `memory` | `memory` ou `redis` |
 | `grox.session.redis.url`, `grox.session.redis.keyPrefix` | `redis://localhost:6379`, `grox:session:` | |

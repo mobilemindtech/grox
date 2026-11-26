@@ -47,7 +47,7 @@ Uma lista para revisar antes de colocar uma aplicação no ar. O Grox já liga v
 
 ## Plugins
 
-- [ ] PDF (plugin rendering): não monte templates com URLs vindas do usuário em `<img src>`. O Flying Saucer busca as URLs do documento no servidor.
+- [ ] PDF (plugin rendering): os recursos do template só vêm do próprio servidor, de `data:` e de `grox.rendering.allowedUrls`. Mantenha essa lista curta, só com hosts controlados pela aplicação.
 - [ ] RabbitMQ com `ssl: true` valida o certificado pelo truststore da JVM; configure o truststore em vez de desligar a validação.
 - [ ] Redis com `useSSL` verifica o nome do host.
 - [ ] Auditoria com `asyncWrite` ou dentro de `Tenants.withoutId`: confira que os registros saem com o tenant e o usuário certos.

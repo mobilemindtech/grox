@@ -135,7 +135,13 @@ renderPdf(template: 'recibo', model: [conta: c])                  // no controll
 - O nome do arquivo no `Content-Disposition` é escapado.
 - Renderizar GIF, PNG ou JPEG como saída ❌.
 
-Cuidado: um template que coloca URL vinda do usuário em `<img src>` faz o servidor buscar essa URL (inclusive endereços internos ou `file:`). Use só URLs controladas pela aplicação.
+- **Recursos só do próprio servidor** *(extensão Grox)*: imagens, CSS e fontes são buscados apenas na origem do `base` (esquema, host e porta), em `data:` e nos prefixos de `grox.rendering.allowedUrls`. Uma URL vinda do usuário em `<img src>` (endereço interno, `file:`) é recusada com aviso no log, e o PDF sai sem ela. No plugin original, o servidor buscava qualquer URL do template.
+
+```yaml
+grox:
+  rendering:
+    allowedUrls: ['https://cdn.exemplo.com/']   # além do próprio servidor
+```
 
 ## Excel (plugin excel-export)
 
@@ -182,6 +188,7 @@ class Contrato implements Auditable {
 
 - **O que é gravado:** um registro por propriedade, com `eventName` (`INSERT`, `UPDATE`, `DELETE`), `propertyName`, `oldValue`, `newValue`, `actor`, `uri`, `className`, `persistedObjectId` e `persistedObjectVersion`. No UPDATE, só as alteradas, com o valor antigo vindo do banco. Os valores são truncados no `maxSize` da domain de auditoria.
 - **Quando:** depois do commit, numa sessão nova. Com `asyncWrite`, num executor de virtual threads (`asyncWriteThreads`, `asyncWriteQueueCapacity`). Sem transação, grava na hora.
+- **Tenant:** com uma domain de auditoria `MultiTenant`, o registro é gravado no tenant da entidade auditada (ou no tenant atual, se ela não for multi-tenant), capturado na hora do evento. Vale também com `asyncWrite` e dentro de `Tenants.withoutId`, onde antes o registro ficava sem tenant e se perdia.
 - **Configuração:** as chaves e padrões do plugin: `verbose`, `excluded`, `included`, `mask`, `propertyMask`, `logIds`, `defaultActor`, `failOnError`, `truncateLength`, `ignoreEvents`. A domain pode sobrescrever os métodos do trait (`isAuditable(evento)`, `getLogExcluded()`, `beforeSaveLog(audit)`...).
 - **Quem:** o bean `auditRequestResolver` (`AuditRequestResolver`, com `currentActor` e `currentURI`). O padrão é o `SpringSecurityRequestResolver` com segurança ativa; uma subclasse pode ser registrada no `resources.groovy`.
 - **Desligar num trecho:** `AuditLogContext.withoutAuditLog { ... }` ou `AuditLogContext.withConfig([verbose: false]) { ... }`.

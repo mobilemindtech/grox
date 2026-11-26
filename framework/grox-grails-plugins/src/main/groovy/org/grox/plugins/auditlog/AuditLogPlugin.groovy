@@ -64,11 +64,26 @@ class AuditLogPlugin {
         AuditLogConfig.current = AuditLogConfig.DEFAULTS
     }
 
+    /**
+     * O tenant em que o registro de auditoria é gravado (só se a domain de auditoria for multi-tenant): o da entidade
+     * auditada, ou o atual. Capturado na hora do evento: a gravação é depois do commit, numa sessão nova, e com
+     * {@code asyncWrite} noutra thread (sem o contexto da requisição); dentro de {@code Tenants.withoutId}, o
+     * registro ficaria sem tenant e não seria gravado.
+     */
+    static Object tenantFor(Object audited) {
+        Class<?> auditClass = auditDomainClass
+        if (auditClass == null || !Gorm.domain(auditClass).multiTenant) return null
+        DomainClass d = Gorm.domain(audited.getClass())
+        Object own = d.multiTenant ? d.tenantProperty?.get(audited) : null
+        own != null ? own : grails.gorm.multitenancy.Tenants.currentIdOrNull()
+    }
+
     /** Enfileira o registro na transação corrente (gravado após o commit) ou grava já, se não houver transação. */
-    static void enqueue(Object audit) {
+    static void enqueue(Object audit, Object tenant = null) {
+        Object[] entry = [audit, tenant] as Object[]
         Session s = Persistence.currentHolder()?.session
         if (s == null || !s.transaction.active) {
-            write([audit])
+            write([entry])
             return
         }
         def tx = s.transaction
@@ -87,7 +102,7 @@ class AuditLogPlugin {
                 }
             })
         }
-        pending << audit
+        pending << entry
     }
 
     private static void afterCommit(List<Object> audits) {
@@ -109,10 +124,15 @@ class AuditLogPlugin {
         }
     }
 
-    /** Numa sessão nova: a da requisição pode estar no fim do commit (ou ser de outra thread). */
-    static void write(List<Object> audits) {
-        Persistence.withNewTransaction {
-            audits.each { it.invokeMethod('save', [[failOnError: true]] as Object[]) }
+    /** Numa sessão nova (a da requisição pode estar no fim do commit, ou ser de outra thread), no tenant capturado. */
+    static void write(List<Object> entries) {
+        entries.groupBy { Object e -> ((Object[]) e)[1] }.each { Object tenant, List<Object> group ->
+            Closure save = {
+                Persistence.withNewTransaction {
+                    group.each { Object e -> ((Object[]) e)[0].invokeMethod('save', [[failOnError: true]] as Object[]) }
+                }
+            }
+            tenant != null ? grails.gorm.multitenancy.Tenants.withId((Serializable) tenant, save) : save.call()
         }
     }
 }

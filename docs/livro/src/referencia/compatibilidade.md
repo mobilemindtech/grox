@@ -244,7 +244,7 @@ Legenda: ✅ suportado · 🟡 parcial · ❌ ausente (veja o `docs/roadmap.md` 
 | audit-logging (`Auditable`, `grails.plugin.auditLog.*`, `auditRequestResolver`, `AuditLogContext`, gravação depois do commit, `asyncWrite`) | ✅ | Alterações só por flush automático não são auditadas. `Stampable` compila, mas não grava `createdBy`/`lastUpdatedBy`. Vários datasources ❌ |
 | redis (`redisService`: `withRedis`, `memoize*`, `memoizeObject`, `withPipeline`, `withTransaction`, conexões e sentinel) | ✅ | A app declara o jedis. Sem `grails.redis`, usa `localhost:6379`. `memoizeDomainList`/`memoizeDomainObject` e `@Memoize` ❌ |
 | rabbitmq-native (`rabbitMessagePublisher.send`, `rabbitmq.connections/exchanges/queues`) | 🟡 | A app declara o amqp-client. Consumers, RPC e confirms ❌ |
-| rendering (`pdfRenderingService.render`, `renderPdf`, `rendering:inlinePng/Jpeg/Gif`) | ✅ | Sobre Flying Saucer. Saída em GIF/PNG/JPEG ❌ |
+| rendering (`pdfRenderingService.render`, `renderPdf`, `rendering:inlinePng/Jpeg/Gif`) | ✅ | Sobre Flying Saucer. Saída em GIF/PNG/JPEG ❌. Recursos do template só do próprio servidor, de `data:` e de `grox.rendering.allowedUrls` *(extensão Grox)* |
 | excel-export (`XlsxExporter`, `WebXlsxExporter`, `fillHeader`, `fillRow`, `add(lista, propriedades)`) | ✅ | Sobre POI 5 (a app declara `poi-ooxml`). Estilos `bold`/`centre`/`thickBorder`/`left`/`right` |
 | hibernate-filter | ✅ | Ver Dados |
 | asset-pipeline | ✅ | Ver Views |

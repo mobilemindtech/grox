@@ -25,7 +25,7 @@ Legenda: ✅ suportado · 🟡 parcial · ❌ ausente (ver [roadmap](roadmap.md)
 | Plugin audit-logging (`Auditable`, `grails.plugin.auditLog.*`, `auditRequestResolver`, `AuditLogContext`, gravação depois do commit, `asyncWrite`) | ✅ | Alterações só por flush automático (sem `save()`) não são auditadas. `Stampable` compila, mas não grava `createdBy`/`lastUpdatedBy`. Vários datasources ❌ |
 | Plugin redis (`redisService`: `withRedis`, `memoize*`, `memoizeObject`, `withPipeline`, `withTransaction`, conexões e sentinel) | ✅ | A app declara o jedis. `memoizeDomainList`/`memoizeDomainObject` e anotações `@Memoize` ❌ |
 | Plugin rabbitmq-native (`rabbitMessagePublisher.send`, `rabbitmq.connections/exchanges/queues`) | 🟡 | A app declara o amqp-client. Consumers, RPC e confirms ❌ |
-| Plugin rendering (`pdfRenderingService.render`, `renderPdf`) | ✅ | Sobre Flying Saucer (a app declara o flying-saucer-pdf). Imagens (GIF/PNG/JPEG) ❌ |
+| Plugin rendering (`pdfRenderingService.render`, `renderPdf`) | ✅ | Sobre Flying Saucer (a app declara o flying-saucer-pdf). Imagens (GIF/PNG/JPEG) ❌. Recursos do template só do próprio servidor, de `data:` e de `grox.rendering.allowedUrls` |
 | Plugin excel-export (`XlsxExporter`, `WebXlsxExporter`) | ✅ | Sobre POI 5 (a app declara `poi-ooxml`). Subconjunto: `putCellValue`, estilos `bold`/`centre`/`thickBorder`/`left`/`right`, `setWorksheetName`, `setResponseHeaders`, `save` |
 | `grails-app/conf/spring/resources.groovy` | ✅ | `nome(Classe)`, argumentos de construtor, `{ prop = ...; dep = ref('x') }`. Outros recursos do DSL do Spring ❌ |
 | `application.yml` com `${VAR}` / `${VAR:padrão}` | ✅ | Propriedade de sistema, variável de ambiente ou outra chave |

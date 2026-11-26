@@ -116,10 +116,10 @@ Revisão das mudanças desde `14c439e` (compatibilidades do app B e do app C, ch
 - [x] TLS do RabbitMQ com validação do certificado e do host; Redis com verificação do host
 - [x] `Content-Disposition` escapado no PDF (`renderPdf`) e no excel-export; `grailsResourceLocator` sem `..`
 
-**Segurança (pendente):**
-- [ ] PDF (Flying Saucer): `UserAgent` próprio que só aceite `data:` e o host da `base` (hoje um template com URL do usuário em `<img src>` faz o servidor buscar URLs internas ou `file:`)
-- [ ] Audit log com `asyncWrite` ou dentro de `Tenants.withoutId`: gravar com o tenant e o usuário capturados (domain de auditoria multi-tenant perde o registro)
-- [ ] Bean `consoleService` existe mesmo com o console desligado (o app-c-web o usa; só é risco se a app passar entrada do usuário ao `eval`)
+**Segurança (feito em 2026-11-26):**
+- [x] PDF (Flying Saucer): `UserAgent` próprio que só aceite `data:` e o host da `base` (hoje um template com URL do usuário em `<img src>` faz o servidor buscar URLs internas ou `file:`)
+- [x] Audit log com `asyncWrite` ou dentro de `Tenants.withoutId`: gravar com o tenant e o usuário capturados (domain de auditoria multi-tenant perde o registro)
+- [x] Bean `consoleService` existe mesmo com o console desligado (o app-c-web o usa; só é risco se a app passar entrada do usuário ao `eval`): mantido como no plugin web-console, com o aviso no livro (plugins e checklist de segurança)
 
 **Desempenho (feito, baratos):**
 - [x] `methodMissing`/`propertyMissing` de controllers, taglibs, GSP e `grailsApplication` com exceções sem stack (builders tentam o owner primeiro)
