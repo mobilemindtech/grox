@@ -165,7 +165,7 @@ Legenda: ✅ suportado · 🟡 parcial · ❌ ausente (veja o `docs/roadmap.md` 
 | Nomes de tabela e coluna do GORM (snake_case), inclusive palavras reservadas (`User` → `` `user` ``, `userCriado` → `user_criado_id`); dígito e sigla não separam (`valor10Meses` → `valor10meses_id`, `codigoERP` → `codigoerp`) | ✅ | |
 | `dbCreate: update` | 🟡 | Por padrão só adiciona (`grox.schema.update: safe`), como o GORM sobre Hibernate 5, também com `hibernate.dialect` explícito |
 | `withTransaction`, `withNewTransaction`, `withSession`, `withNewSession` | ✅ | |
-| Eventos `beforeInsert`/`beforeUpdate`/`beforeDelete`, `dateCreated`/`lastUpdated` | ✅ | `after*` e `beforeValidate` ❌ |
+| Eventos `beforeInsert`/`beforeUpdate`/`beforeDelete`/`beforeValidate`, `afterInsert`/`afterUpdate`/`afterDelete`/`afterLoad`, `dateCreated`/`lastUpdated` | ✅ | `before*` e `Pre*` também no flush de alterações sem `save()`. `onLoad` ❌ |
 | Listeners `@Listener(Dominio)` com `PreInsertEvent`, `PreUpdateEvent`, `PreDeleteEvent` e `Post*`; subclasses de `AbstractPersistenceEventListener` (bean `hibernateDatastore`) | ✅ | Disparados pelo `save()`/`delete()` do Grox; alterações só por flush automático não disparam `PreUpdate` |
 | `isDirty()`, `isDirty('p')`, `getPersistentValue`, `getDirtyPropertyNames`, `merge`, `attach` | ✅ | Instância destacada ou nova conta como alterada |
 | GORM Data Services (`@Service(Dominio) interface XService`) | ✅ | Por convenção: `get`, `read`, `list`, `count`, `save`, `delete`, `find*`/`findAll*`/`count*`. Classes abstratas ❌ |
@@ -241,7 +241,7 @@ Legenda: ✅ suportado · 🟡 parcial · ❌ ausente (veja o `docs/roadmap.md` 
 |---|---|---|
 | console (`/console`) | ✅ | Editor simples (sem CodeMirror), histórico no navegador, rollback opcional. Arquivos salvos no servidor ❌ |
 | quartz (jobs em `grails-app/jobs`) | ✅ | `static triggers` com `cron` (sem `L`/`W`/`#`) e `simple`, `static concurrent`, `job.triggers()`, jobs como beans e `GrailsJobClass` em `getArtefacts(JobArtefactHandler.TYPE)`. Trigger `custom`, `JobExecutionContext` e clustering ❌ |
-| audit-logging (`Auditable`, `grails.plugin.auditLog.*`, `auditRequestResolver`, `AuditLogContext`, gravação depois do commit, `asyncWrite`) | ✅ | Alterações só por flush automático não são auditadas. `Stampable` compila, mas não grava `createdBy`/`lastUpdatedBy`. Vários datasources ❌ |
+| audit-logging (`Auditable`, `grails.plugin.auditLog.*`, `auditRequestResolver`, `AuditLogContext`, gravação depois do commit, `asyncWrite`) | ✅ | `Stampable` compila, mas não grava `createdBy`/`lastUpdatedBy`. Vários datasources ❌ |
 | redis (`redisService`: `withRedis`, `memoize*`, `memoizeObject`, `withPipeline`, `withTransaction`, conexões e sentinel) | ✅ | A app declara o jedis. Sem `grails.redis`, usa `localhost:6379`. `memoizeDomainList`/`memoizeDomainObject` e `@Memoize` ❌ |
 | rabbitmq-native (`rabbitMessagePublisher.send`, `rabbitmq.connections/exchanges/queues`) | 🟡 | A app declara o amqp-client. Consumers, RPC e confirms ❌ |
 | rendering (`pdfRenderingService.render`, `renderPdf`, `rendering:inlinePng/Jpeg/Gif`) | ✅ | Sobre Flying Saucer. Saída em GIF/PNG/JPEG ❌. Recursos do template só do próprio servidor, de `data:` e de `grox.rendering.allowedUrls` *(extensão Grox)* |

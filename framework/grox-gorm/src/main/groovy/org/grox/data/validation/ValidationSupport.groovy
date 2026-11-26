@@ -34,6 +34,9 @@ trait ValidationSupport {
     }
 
     boolean validate(List<String> fields) {
+        // como no GORM: beforeValidate() ou beforeValidate(List propriedades) antes das constraints
+        if (this.respondsTo('beforeValidate', [List] as Object[])) this.invokeMethod('beforeValidate', fields)
+        else if (this.respondsTo('beforeValidate')) this.invokeMethod('beforeValidate', null)
         ValidationErrors errors = getErrors()
         errors.clear()
         Map<String, Map<String, Object>> constraints = constraintsForValidation()

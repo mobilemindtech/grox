@@ -63,12 +63,15 @@ class GormInstanceApi {
                 managed = false
             }
             Object stored = entity
+            // os eventos before* já rodaram: o flush não os dispara de novo (DomainEventBridge)
+            DomainEventBridge.handled(s, entity)
             if (!managed) {
                 try {
                     if (isNew) {
                         s.persist(entity)   // com id IDENTITY, o INSERT já sai aqui
                     } else {
                         Object merged = s.merge(entity)
+                        DomainEventBridge.handled(s, merged)
                         stored = merged
                         if (!d.composite) d.identity.set(entity, d.identity.get(merged))
                         if (d.version) d.version.set(entity, d.version.get(merged))
@@ -222,7 +225,7 @@ class GormInstanceApi {
         entity
     }
 
-    private static void timestamps(DomainClass d, Object entity, boolean isNew) {
+    static void timestamps(DomainClass d, Object entity, boolean isNew) {
         if (!d.autoTimestamp) return
         DomainProperty created = d['dateCreated']
         DomainProperty updated = d['lastUpdated']

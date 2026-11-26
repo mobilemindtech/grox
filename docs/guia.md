@@ -199,7 +199,7 @@ class Usuario {
         autoTimestamp false
     }
 
-    def beforeInsert() { ... }      // também beforeUpdate, beforeDelete
+    def beforeInsert() { ... }      // também beforeUpdate, beforeDelete, beforeValidate e after*
 }
 ```
 
@@ -351,7 +351,7 @@ Command objects que não são domain classes podem usar `implements grails.valid
 
 ### Eventos, listeners e dirty checking
 
-Métodos `beforeInsert`, `beforeUpdate` e `beforeDelete` da domain class são chamados pelo `save()`/`delete()`. Para lógica fora da entidade (o `UserPasswordEncoderListener` gerado pelo spring-security, por exemplo), use um bean com métodos `@Listener`:
+Métodos `beforeInsert`, `beforeUpdate` e `beforeDelete` da domain class são chamados pelo `save()`/`delete()`; `beforeInsert`/`beforeUpdate` (e os listeners `Pre*`) também no flush de alterações sem `save()`, com o `lastUpdated` e o que o evento mudar indo para o SQL (`DomainEventBridge`). `beforeValidate` roda no `validate()`; `afterInsert`, `afterUpdate`, `afterDelete` e `afterLoad`, depois do SQL. Para lógica fora da entidade (o `UserPasswordEncoderListener` gerado pelo spring-security, por exemplo), use um bean com métodos `@Listener`:
 
 ```groovy
 class UserPasswordEncoderListener {
@@ -878,7 +878,7 @@ grails:
 - **Configuração:** as mesmas chaves e padrões do plugin (`disabled`, `verbose`, `excluded`, `included`, `mask`, `propertyMask`, `logIds`, `defaultActor`, `failOnError`, `truncateLength`, `ignoreEvents`). A domain pode sobrescrever os métodos do trait (`isAuditable(evento)`, `getLogExcluded()`, `beforeSaveLog(audit)`...).
 - **Quem:** bean `auditRequestResolver` (`AuditRequestResolver`, com `currentActor` e `currentURI`). O padrão é o `SpringSecurityRequestResolver` com segurança ativa; uma subclasse pode ser registrada no `resources.groovy`.
 - **Desligar num trecho:** `AuditLogContext.withoutAuditLog { ... }`, ou `AuditLogContext.withConfig([verbose: false]) { ... }`.
-- Os eventos vêm do `save()`/`delete()` do Grox, então uma alteração gravada só pelo flush automático, sem `save()`, não é auditada. `Stampable` compila, mas `createdBy`/`lastUpdatedBy` ainda não são persistidos.
+- Alterações feitas sem `save()` também são auditadas (os eventos `Pre*` disparam no flush). `Stampable` compila, mas `createdBy`/`lastUpdatedBy` ainda não são persistidos.
 
 ## Redis (plugin redis)
 

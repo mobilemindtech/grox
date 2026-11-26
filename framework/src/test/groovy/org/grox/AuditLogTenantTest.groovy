@@ -66,7 +66,10 @@ class AuditLogTenantTest {
     void 'gravacao sincrona tambem'() {
         ativar(false)
         System.setProperty(SystemPropertyTenantResolver.PROPERTY, 'globex')
-        NotaAuditada.withTransaction { new NotaAuditada(texto: 'x').save(failOnError: true) }
+        Long id = NotaAuditada.withTransaction { new NotaAuditada(texto: 'x').save(failOnError: true).id }
         assert registros() == [globex: ['INSERT']]
+        // alteração só por dirty checking, sem save(): antes não era auditada
+        NotaAuditada.withTransaction { NotaAuditada.get(id).texto = 'y' }
+        assert registros() == [globex: ['INSERT', 'UPDATE']]
     }
 }

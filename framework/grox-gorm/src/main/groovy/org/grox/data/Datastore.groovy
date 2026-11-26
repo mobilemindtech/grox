@@ -89,6 +89,7 @@ class Datastore implements AutoCloseable, org.grails.orm.hibernate.HibernateData
                 int semProxy = skipUnneededProxies(metadata, proxies)
                 SessionFactory sf = metadata.buildSessionFactory()
                 HasOneCascade.register(sf, domains.values())
+                DomainEventBridge.register(sf)
                 log.info("Datastore: ${domains.size()} domain classes, ${dataSource.jdbcUrl} (dbCreate: ${dbCreate}), " +
                         "Hibernate em ${(System.nanoTime() - t0).intdiv(1_000_000)}ms" + (semProxy ? ", ${semProxy} sem proxy lazy" : ''))
                 sf

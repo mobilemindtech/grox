@@ -26,7 +26,7 @@ class GormTest {
     static void start() {
         def config = new Config([dataSource: [url: 'jdbc:h2:mem:gormTest;DB_CLOSE_DELAY=-1', dbCreate: 'create-drop'],
                                  hibernate : [generate_statistics: true]])
-        datastore = new Datastore(config, [Autor, Livro, org.grox.testdomain.Etiquetado, org.grox.testdomain.Pasta, org.grox.testdomain.Rosto, org.grox.testdomain.Nariz, org.grox.testdomain.Produto, org.grox.testdomain.Carro, org.grox.testdomain.Motor], GormTest.classLoader)
+        datastore = new Datastore(config, [Autor, Livro, org.grox.testdomain.Etiquetado, org.grox.testdomain.Pasta, org.grox.testdomain.Rosto, org.grox.testdomain.Nariz, org.grox.testdomain.Produto, org.grox.testdomain.Carro, org.grox.testdomain.Motor, org.grox.testdomain.Evento], GormTest.classLoader)
         Gorm.init(datastore)
     }
 
@@ -402,6 +402,36 @@ class GormTest {
         }
         def pe = datastore.mappingContext.getPersistentEntity(org.grox.testdomain.Motor.name).getPropertyByName('carro')
         assert pe instanceof org.grails.datastore.mapping.model.types.OneToOne && !pe.owningSide
+    }
+
+    @Test
+    void 'eventos de domain: before no flush sem save, after e beforeValidate, sem disparo duplo'() {
+        def E = org.grox.testdomain.Evento
+        E.chamadas.clear()
+        Long id = E.withTransaction { new org.grox.testdomain.Evento(nome: 'a').save(failOnError: true).id }
+        assert E.chamadas == ['beforeInsert', 'beforeValidate', 'afterInsert']
+        Date criado = Persistence.withNewSession { E.get(id).lastUpdated }
+
+        // alteração só por dirty checking: antes, nenhum evento (nem lastUpdated, nem @Listener/audit log)
+        E.chamadas.clear()
+        Thread.sleep(5)
+        E.withTransaction { E.get(id).nome = 'b' }
+        assert E.chamadas == ['afterLoad', 'beforeUpdate', 'afterUpdate']
+        def gravado = Persistence.withNewSession { E.get(id) }
+        assert gravado.nome == 'b' && gravado.marca == 'alterado em beforeUpdate' && gravado.lastUpdated.after(criado)
+
+        // com save(): beforeUpdate uma vez só (o save já disparou; o flush não repete)
+        E.chamadas.clear()
+        E.withTransaction {
+            def e = E.get(id)
+            e.nome = 'c'
+            e.save(failOnError: true)
+        }
+        assert E.chamadas.count('beforeUpdate') == 1 && E.chamadas.contains('afterUpdate')
+
+        E.chamadas.clear()
+        E.withTransaction { E.get(id).delete() }
+        assert E.chamadas.contains('afterDelete')
     }
 
     @Test

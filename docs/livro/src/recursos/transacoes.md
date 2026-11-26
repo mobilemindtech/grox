@@ -117,10 +117,15 @@ class Usuario {
     def beforeInsert() { senha = Passwords.encode(senha) }
     def beforeUpdate() { if (isDirty('senha')) senha = Passwords.encode(senha) }
     def beforeDelete() { ... }
+    def beforeValidate() { ... }               // ou beforeValidate(List propriedades)
+    def afterInsert() { ... }                  // também afterUpdate, afterDelete e afterLoad
 }
 ```
 
-São chamados pelo `save()` e pelo `delete()` do Grox. `after*` e `beforeValidate` ainda não existem.
+- `beforeInsert`/`beforeUpdate` rodam no `save()` (antes da validação) e também no flush de uma entidade alterada **sem** `save()` (dirty checking) ou salva por cascata, como no GORM. Nesse caso, o `lastUpdated` é atualizado, e o que o evento muda na entidade vai para o SQL. Uma entidade que passou pelo `save()` não dispara de novo no flush.
+- `beforeDelete` roda no `delete()`.
+- `beforeValidate` roda no início do `validate()` (e do `save()`), também em command objects.
+- `afterInsert`, `afterUpdate`, `afterDelete` e `afterLoad` rodam depois do SQL (ou da carga).
 
 ## Listeners
 
@@ -156,7 +161,7 @@ class AuditoriaListener extends AbstractPersistenceEventListener {
 // resources.groovy: auditoriaListener(AuditoriaListener, ref('hibernateDatastore'))
 ```
 
-Os eventos vêm do `save()`/`delete()`: uma alteração gravada só pelo flush automático, sem `save()`, não dispara `PreUpdate`.
+`PreInsert`/`PreUpdate` disparam no `save()` e também no flush de uma alteração feita sem `save()`; `PreDelete`, no `delete()`.
 
 ## Dirty checking
 
@@ -174,8 +179,6 @@ A comparação é com o estado carregado do banco. Uma instância nova ou destac
 | Recurso | Grox |
 |---|---|
 | Flush no fim da requisição de entidades alteradas sem `save()` | Não acontece fora de transação |
-| `after*`, `beforeValidate` | ❌ |
-| `PreUpdate` no flush automático | Só no `save()` |
 | `static transactional` | ❌ |
 | `isolation`/`timeout`/`rollbackFor` | Aceitos, sem efeito |
 | Sessão em tarefas assíncronas | Própria da tarefa (a Session do Hibernate não é thread-safe) |

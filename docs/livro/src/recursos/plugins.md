@@ -194,7 +194,7 @@ class Contrato implements Auditable {
 - **Desligar num trecho:** `AuditLogContext.withoutAuditLog { ... }` ou `AuditLogContext.withConfig([verbose: false]) { ... }`.
 - A domain de auditoria segue o formato do `audit-quickstart`.
 
-Limites: alterações gravadas só pelo flush automático, sem `save()`, não são auditadas; `Stampable` compila, mas `createdBy`/`lastUpdatedBy` não são gravados; vários datasources ❌. Sob carga, prefira `asyncWrite`: a gravação síncrona pede uma segunda conexão enquanto a da requisição está presa.
+Limites: `Stampable` compila, mas `createdBy`/`lastUpdatedBy` não são gravados; vários datasources ❌. Sob carga, prefira `asyncWrite`: a gravação síncrona pede uma segunda conexão enquanto a da requisição está presa.
 
 ## Filtros do Hibernate (plugin hibernate-filter)
 

@@ -34,7 +34,7 @@ Status: **não iniciado**. Ordem sugerida:
   - [ ] `hasOne` e `embedded`
   - [ ] Herança de domain classes
   - [x] Dirty checking (`isDirty`, `getPersistentValue`) e listeners `Pre/Post*` (`@Listener`), feitos no piloto
-  - [ ] Eventos de domain `after*` e `beforeValidate`; `Pre*Update` também no flush automático (hoje só no `save()`)
+  - [x] Eventos de domain `after*` e `beforeValidate`; `Pre*Update` também no flush automático (2026-11-26: `DomainEventBridge`)
 - [ ] **Desenvolvimento**
   - [x] Hot reload de controllers, services, taglibs, domain classes e `src/` no `run`, com classloaders por geração, recarga leve e completa, e Gradle contínuo incremental (ver [guia](guia.md#recarga-de-classes-em-desenvolvimento))
   - [x] Recarga das bibliotecas `org.grox.lib` do mesmo build (diretas e transitivas), como o `app-c-core` do app-c: classes, resources, classpath do `run` sem os jars delas e Gradle contínuo; com fontes fora da raiz do build (build paralelo), Gradle sob demanda (`grox.reload.sources`), porque o contínuo não as vê (2026-11-04)
