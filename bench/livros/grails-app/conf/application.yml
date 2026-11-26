@@ -1,0 +1,76 @@
+# Mesma configuração para o Grails 8 (bench/livros-grails) e para o Grox (bench/livros): as chaves grox.* o
+# Grails ignora. As regras de acesso são as do sample-plain.
+info:
+  app:
+    name: livros
+
+server:
+  port: 8080
+
+grox:
+  i18n:
+    defaultLocale: pt-BR
+
+grails:
+  profile: web
+  codegen:
+    defaultPackage: bench.livros
+  mime:
+    disable:
+      accept:
+        header:
+          userAgents: [Gecko, WebKit, Presto, Trident]
+    types:
+      all: '*/*'
+      css: text/css
+      form: application/x-www-form-urlencoded
+      html: [text/html, application/xhtml+xml]
+      js: text/javascript
+      json: [application/json, text/json]
+      multipartForm: multipart/form-data
+      text: text/plain
+      xml: [text/xml, application/xml]
+  views:
+    default:
+      codec: html
+    gsp:
+      encoding: UTF-8
+      htmlcodec: xml
+      codecs:
+        expression: html
+        scriptlet: html
+        taglib: none
+        staticparts: none
+  plugin:
+    springsecurity:
+      userLookup:
+        userDomainClassName: bench.livros.User
+        authorityJoinClassName: bench.livros.UserRole
+      authority:
+        className: bench.livros.Role
+      securityConfigType: InterceptUrlMap
+      interceptUrlMap:
+        - {pattern: '/', access: [permitAll]}
+        - {pattern: '/error', access: [permitAll]}
+        - {pattern: '/notFound', access: [permitAll]}
+        - {pattern: '/login/**', access: [permitAll]}
+        - {pattern: '/logout/**', access: [permitAll]}
+        - {pattern: '/ola/**', access: [permitAll]}
+        - {pattern: '/livros', httpMethod: GET, access: [permitAll]}
+        - {pattern: '/api/livros/**', httpMethod: GET, access: [permitAll]}
+        - {pattern: '/**', access: ['isAuthenticated()']}
+
+dataSource:
+  pooled: true
+  jmxExport: false
+  driverClassName: org.h2.Driver
+  username: sa
+  password: ''
+  dbCreate: create-drop
+  url: jdbc:h2:mem:livros;DB_CLOSE_DELAY=-1
+
+hibernate:
+  cache:
+    queries: false
+    use_second_level_cache: false
+    use_query_cache: false

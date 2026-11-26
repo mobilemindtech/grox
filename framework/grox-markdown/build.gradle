@@ -1,0 +1,10 @@
+// Views em Markdown (commonmark) ao lado das GSPs: o .md é uma GSP (${}, TagLibs) cuja saída vira HTML
+dependencies {
+    api project(':framework:grox-gsp')
+    api libs.commonmark
+    implementation libs.commonmark.ext.gfm.tables
+    implementation libs.commonmark.ext.gfm.strikethrough
+    implementation libs.commonmark.ext.autolink
+    implementation libs.commonmark.ext.heading.anchor
+    implementation libs.commonmark.ext.yaml.front.matter
+}

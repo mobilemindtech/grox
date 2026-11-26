@@ -1,0 +1,9 @@
+// Autocomplete do IntelliJ IDEA para as rotas do grox-dsl. O IDEA lê os arquivos *.gdsl dos jars do classpath.
+// Classes @Handler ganham a API do HandlerApi (render, respond, params...), aplicada pela anotação.
+
+contributor(context(ctype: 'java.lang.Object')) {
+    def c = psiClass
+    if (c == null || c.modifierList?.findAnnotation('org.grox.dsl.Handler') == null) return
+    def api = findClass('org.grox.dsl.HandlerApi')
+    if (api != null) delegatesTo(api)
+}

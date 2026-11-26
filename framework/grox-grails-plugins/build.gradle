@@ -1,0 +1,13 @@
+// Plugins do Grails reimplementados (console, quartz, excel, redis, rabbitmq, auditlog, rendering,
+// spring-security, asset-pipeline) e as APIs originais
+dependencies {
+    api project(':framework:grox-grails')
+    implementation libs.bcrypt   // BCryptPasswordEncoder do spring-security-crypto
+
+    // plugins opcionais: a app traz a dependência em runtime
+    compileOnly libs.poi.ooxml
+    compileOnly libs.jedis          // plugin redis (org.grox.plugins.redis): a app declara o jedis
+    compileOnly libs.gson           // memoizeObject do plugin redis
+    compileOnly libs.amqp.client    // plugin rabbitmq-native (org.grox.plugins.rabbitmq): a app declara o amqp-client
+    compileOnly libs.flying.saucer.pdf   // plugin rendering (PDF): a app declara o flying-saucer-pdf
+}

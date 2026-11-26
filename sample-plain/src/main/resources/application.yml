@@ -1,0 +1,31 @@
+server:
+  port: 8080
+
+grox:
+  i18n:
+    defaultLocale: pt-BR
+  routes:
+    # virtual (padrão) ou actor; cada rota ou grupo pode trocar (execution:, poolSize:)
+    execution: virtual
+
+# segurança: usuários na DSL de projeto (Aplicacao.app) e regras por caminho no application.groovy
+
+dataSource:
+  driverClassName: org.h2.Driver
+  username: sa
+  password: ''
+  dbCreate: create-drop
+
+---
+environments:
+  development:
+    dataSource:
+      url: jdbc:h2:mem:plainDev;DB_CLOSE_DELAY=-1
+  production:
+    dataSource:
+      url: jdbc:h2:mem:plainProd;DB_CLOSE_DELAY=-1
+  test:
+    server:
+      port: 0
+    dataSource:
+      url: jdbc:h2:mem:plainTest;DB_CLOSE_DELAY=-1

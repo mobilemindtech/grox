@@ -1,0 +1,3 @@
+moduleName=grox-gsp-extensions
+moduleVersion=0.1.0
+extensionClasses=org.grox.view.CodecExtensions

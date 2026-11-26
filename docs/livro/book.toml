@@ -1,0 +1,25 @@
+[book]
+title = "Grox"
+description = "Framework web sobre os atores do Groovy 6 que emula a API do Grails: guia de migração, uso sem Grails e referência"
+authors = ["Ricardo Bocchi"]
+language = "pt-BR"
+src = "src"
+
+[build]
+build-dir = "build"
+create-missing = false
+
+[output.html]
+site-url = "/grox/"
+git-repository-url = "https://github.com/mobilemindtech/grox"
+edit-url-template = "https://github.com/mobilemindtech/grox/edit/master/docs/livro/{path}"
+default-theme = "light"
+preferred-dark-theme = "navy"
+no-section-label = false
+
+[output.html.search]
+enable = true
+limit-results = 30
+
+[output.html.print]
+enable = true

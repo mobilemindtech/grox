@@ -1,0 +1,26 @@
+//- A lista de livros em Pug: expressões em Groovy e as TagLibs como elementos (ns:tag)
+mixin capa(livro)
+  li.livro
+    g:link(uri='/livros/' + livro.id) #{livro.titulo}
+    |  por
+    fmt:autor(livro=livro)
+    if livro.ano
+      |  (#{livro.ano})
+
+html
+  head
+    meta(name='layout' content='main')
+    title Catálogo
+  body
+    h1 Catálogo (#{livros.size()} livros)
+    ul.catalogo
+      each l in livros
+        +capa(l)
+    fmt:destaque
+      | Mais antigo: #{livros ? livros.min { it.ano ?: 9999 }.titulo : '-'}
+    p= params.busca ? "Busca: ${params.busca}" : 'Sem busca'
+    p!= g.createLink(uri: '/ajuda')
+    include _rodape
+    g:form(uri='/livros' method='POST')
+      input(name='titulo')
+      button Salvar

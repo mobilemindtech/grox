@@ -1,0 +1,5 @@
+// Usuários e tokens em domain classes; tenant do usuário logado
+dependencies {
+    api project(':framework:grox-gorm')
+    api project(':framework:grox-security')
+}

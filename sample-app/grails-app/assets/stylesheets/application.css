@@ -1,0 +1,6 @@
+/*
+ *= require base
+ *= require_self
+ */
+header nav .marca { padding-left: 1.6rem; background: url('../images/logo.svg') no-repeat left center / 1.2rem; }
+header nav a.atual { text-decoration: underline; }

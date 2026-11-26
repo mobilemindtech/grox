@@ -1,0 +1,34 @@
+// Autocomplete do IntelliJ IDEA para os artefatos do layout Grails no Grox. O IDEA lê os arquivos *.gdsl dos jars do
+// classpath; nada precisa ser configurado na aplicação. A AST aplica as traits abaixo pelo diretório do fonte
+// (grails-app/ ou grox-app/), e o IDEA não roda a AST: este descritor diz a ele o que cada classe ganha.
+// Com outro nome de diretório (grox { appDir }), declare a trait na classe (implements ControllerApi...).
+
+// [diretório, sufixo da classe, trait aplicada pela AST]; o GdslTest confere que as traits existem
+def ARTEFACTS = [
+    ['controllers', 'Controller', 'org.grox.web.api.ControllerApi'],
+    ['controllers', 'Interceptor', 'org.grox.web.interceptor.InterceptorApi'],
+    ['services', 'Service', 'org.grox.web.api.ServiceApi'],
+    ['taglib', 'TagLib', 'org.grox.web.taglib.GrailsTagLibApi'],
+    ['init', '', 'org.grox.core.LogApi'],
+    ['jobs', 'Job', 'org.grox.plugins.quartz.JobApi'],
+]
+
+contributor(context(ctype: 'java.lang.Object')) {
+    def c = psiClass
+    if (c == null || c.name == null) return
+    String path = c.containingFile?.originalFile?.virtualFile?.path ?: ''
+    def m = path =~ /.*\/(grails-app|grox-app)\/([^\/]+)\/.*/
+    if (!m.matches()) return
+    String dir = m.group(2)
+    ARTEFACTS.each { a ->
+        if (a[0] == dir && c.name.endsWith(a[1])) {
+            def trait = findClass(a[2])
+            if (trait != null) delegatesTo(trait)
+        }
+    }
+    // static scaffold = Livro: o controller estende o RestfulController da domain
+    if (dir == 'controllers' && c.findFieldByName('scaffold', false) != null) {
+        def restful = findClass('grails.rest.RestfulController')
+        if (restful != null) delegatesTo(restful)
+    }
+}

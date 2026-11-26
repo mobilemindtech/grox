@@ -1,0 +1,27 @@
+// App de referência do benchmark Grails x Grox (docs/benchmark.md): o mesmo grails-app/ roda no Grails 8
+// (bench/livros-grails, build à parte) e aqui, no Grox com o módulo Grails. O sample-plain tem as mesmas
+// páginas no grox-dsl.
+plugins {
+    id 'org.grox.app'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':framework:grox-grails')
+    implementation project(':framework:grox-grails-plugins')   // springSecurityService e as tags dos plugins
+    runtimeOnly libs.slf4j.simple
+    runtimeOnly libs.h2
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(27)
+    }
+}
+
+application {
+    mainClass = 'bench.livros.Application'
+}

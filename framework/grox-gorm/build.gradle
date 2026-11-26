@@ -1,0 +1,6 @@
+// API do GORM sobre o Hibernate, validação, binding e a AST do where
+dependencies {
+    api project(':framework:grox-core')
+    api libs.hibernate.core
+    implementation libs.hikari
+}

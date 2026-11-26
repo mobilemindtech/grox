@@ -1,0 +1,12 @@
+// Views em Pug (pug4j) ao lado das GSPs: expressões em Groovy, TagLibs como elementos (g:link(...)) e layouts SiteMesh
+dependencies {
+    api project(':framework:grox-gsp')
+    api(libs.pug4j) {
+        // o Grox avalia as expressões em Groovy: sem o GraalJS do GraalJsExpressionHandler; o filtro
+        // :markdown usa o commonmark (do grox-markdown), não o flexmark
+        exclude group: 'org.graalvm.polyglot'
+        exclude group: 'org.graalvm.js'
+        exclude group: 'com.vladsch.flexmark'
+    }
+    compileOnly libs.commonmark
+}

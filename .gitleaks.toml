@@ -1,0 +1,10 @@
+# Varredura de segredos (gitleaks): regras padrão mais os valores de exemplo do projeto.
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Credenciais de exemplo dos samples, do livro e dos testes"
+regexes = [
+  '''^(admin:admin|leitor:leitor)$''',
+  '''^0123456789abcdef0123456789abcdef$''',
+]

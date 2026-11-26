@@ -1,0 +1,2 @@
+// Build à parte (não entra no settings.gradle da raiz): o plugin Gradle do Grails traz outro Groovy no classpath.
+rootProject.name = 'livros-grails'

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="utf-8"/>
+<title>Console · @@APP@@</title>
+<style>
+  :root { --bg:#1e1f24; --panel:#26272e; --fg:#e6e6e6; --muted:#9aa0aa; --accent:#6aa6ff; --err:#ff7a7a; --ok:#7ad38a; }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--fg); display:grid; grid-template-columns: 1fr 280px; grid-template-rows: auto 1fr; height:100vh; }
+  header { grid-column: 1 / 3; display:flex; gap:1rem; align-items:center; padding:.5rem 1rem; background:var(--panel); border-bottom:1px solid #333; }
+  header h1 { font-size:1rem; margin:0; }
+  header .spacer { flex:1; }
+  button { background:var(--accent); color:#000; border:0; border-radius:.3rem; padding:.35rem .9rem; font-weight:600; cursor:pointer; }
+  button.secondary { background:#444; color:var(--fg); }
+  label { color:var(--muted); font-size:.9rem; }
+  main { display:grid; grid-template-rows: 1fr 1fr; min-height:0; }
+  textarea { width:100%; height:100%; resize:none; border:0; padding:1rem; background:var(--bg); color:var(--fg); font:14px/1.45 ui-monospace, monospace; outline:none; tab-size:4; }
+  #saida { overflow:auto; padding:.75rem 1rem; border-top:1px solid #333; font:13px/1.4 ui-monospace, monospace; }
+  #saida pre { margin:.2rem 0 .8rem; white-space:pre-wrap; word-break:break-word; }
+  .rotulo { color:var(--muted); font-size:.75rem; text-transform:uppercase; letter-spacing:.05em; }
+  .erro { color:var(--err); } .resultado { color:var(--ok); }
+  aside { background:var(--panel); border-left:1px solid #333; overflow:auto; padding:.75rem; font-size:.85rem; }
+  aside h2 { font-size:.8rem; color:var(--muted); text-transform:uppercase; margin:.8rem 0 .4rem; }
+  aside li { cursor:pointer; padding:.25rem .3rem; border-radius:.2rem; font-family: ui-monospace, monospace; font-size:.8rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; list-style:none; }
+  aside li:hover { background:#333; }
+  aside ul { padding:0; margin:0; }
+  aside code { color:var(--accent); }
+</style>
+</head>
+<body>
+<header>
+  <h1>Console · @@APP@@</h1>
+  <button id="executar" title="Ctrl+Enter">Executar</button>
+  <button id="limpar" class="secondary">Limpar saída</button>
+  <label><input type="checkbox" id="rollback"/> rollback no final</label>
+  <span class="spacer"></span>
+  <span id="status" class="rotulo"></span>
+</header>
+<main>
+  <textarea id="codigo" spellcheck="false" placeholder="// Ctrl+Enter executa (a seleção, se houver)&#10;println Usuario.count()&#10;Usuario.where { idade > 18 }.list()*.nome"></textarea>
+  <div id="saida"></div>
+</main>
+<aside>
+  <h2>Bindings</h2>
+  <p><code>ctx</code> <code>grailsApplication</code> <code>config</code> <code>runtime</code> <code>request</code> <code>session</code> <code>springSecurityService</code> <code>log</code> <code>out</code></p>
+  <h2>Services</h2>
+  <p><code>@@BEANS@@</code></p>
+  <h2>Histórico</h2>
+  <ul id="historico"></ul>
+</aside>
+<script>
+(() => {
+  const codigo = document.getElementById('codigo'), saida = document.getElementById('saida'),
+        status = document.getElementById('status'), historico = document.getElementById('historico'),
+        rollback = document.getElementById('rollback');
+  const CHAVE = 'grox.console.historico', RASCUNHO = 'grox.console.rascunho';
+  if (!@@DATA@@) rollback.parentElement.style.display = 'none';
+  const ler = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d } catch (e) { return d } };
+  const gravar = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch (e) {} };
+  codigo.value = ler(RASCUNHO, '');
+  codigo.addEventListener('input', () => gravar(RASCUNHO, codigo.value));
+
+  function desenharHistorico() {
+    historico.innerHTML = '';
+    ler(CHAVE, []).forEach(c => {
+      const li = document.createElement('li');
+      li.textContent = c.split('\n')[0];
+      li.title = c;
+      li.onclick = () => { codigo.value = c; gravar(RASCUNHO, c); codigo.focus(); };
+      historico.appendChild(li);
+    });
+  }
+
+  function bloco(rotulo, texto, classe) {
+    if (texto === null || texto === undefined || texto === '') return;
+    const div = document.createElement('div');
+    const r = document.createElement('div'); r.className = 'rotulo'; r.textContent = rotulo;
+    const pre = document.createElement('pre'); pre.textContent = texto; if (classe) pre.className = classe;
+    div.append(r, pre); saida.prepend(div);
+  }
+
+  async function executar() {
+    const sel = codigo.value.substring(codigo.selectionStart, codigo.selectionEnd);
+    const code = sel.trim() ? sel : codigo.value;
+    if (!code.trim()) return;
+    status.textContent = 'executando…';
+    try {
+      const r = await fetch('@@EXECUTE@@', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', '@@HEADER@@': '@@CSRF@@' },
+        body: JSON.stringify({ code, rollback: rollback.checked })
+      });
+      if (!r.ok) { status.textContent = 'HTTP ' + r.status; bloco('erro', await r.text(), 'erro'); return; }
+      const j = await r.json();
+      const div = document.createElement('div'); div.innerHTML = '<hr style="border-color:#333">'; saida.prepend(div);
+      bloco('erro', j.error, 'erro');
+      bloco('resultado' + (j.resultType ? ' · ' + j.resultType : ''), j.error ? null : j.result, 'resultado');
+      bloco('saída', j.output);
+      status.textContent = j.durationMs + ' ms' + (j.rolledBack ? ' · rollback' : '');
+      const h = [code, ...ler(CHAVE, []).filter(c => c !== code)].slice(0, 30);
+      gravar(CHAVE, h); desenharHistorico();
+    } catch (e) { status.textContent = 'falhou'; bloco('erro', String(e), 'erro'); }
+  }
+
+  document.getElementById('executar').onclick = executar;
+  document.getElementById('limpar').onclick = () => { saida.innerHTML = ''; status.textContent = ''; };
+  codigo.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); executar(); }
+    if (e.key === 'Tab') { e.preventDefault(); const s = codigo.selectionStart;
+      codigo.value = codigo.value.slice(0, s) + '    ' + codigo.value.slice(codigo.selectionEnd); codigo.selectionStart = codigo.selectionEnd = s + 4; }
+  });
+  desenharHistorico();
+})();
+</script>
+</body>
+</html>

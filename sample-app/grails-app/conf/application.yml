@@ -1,0 +1,94 @@
+server:
+  port: 8080
+
+grox:
+  controllers:
+    # pool: N atores por controller | request: um ator por requisição
+    concurrency: pool
+    poolSize: 16
+  session:
+    timeout: 1800
+    # memory (padrão) ou redis
+    store: memory
+    redis:
+      url: redis://localhost:6379
+  i18n:
+    defaultLocale: pt-BR
+
+grails:
+  gorm:
+    multiTenancy:
+      mode: DISCRIMINATOR
+      # tenant do usuário logado (User.tenantId ou claim 'tenant' do JWT)
+      tenantResolverClass: org.grox.security.gorm.UserTenantResolver
+  plugin:
+    # plugin audit-logging (domains que implementam Auditable)
+    auditLog:
+      auditDomainClassName: sample.AuditTrail
+      logFullClassName: false
+      mask: [senha]
+    springsecurity:
+      userLookup:
+        userDomainClassName: sample.auth.User
+        authorityJoinClassName: sample.auth.UserRole
+        tenantPropertyName: tenantId
+      authority:
+        className: sample.auth.Role
+      useBasicAuth: true
+      # sem sessão nem CSRF: só Bearer (JWT) ou Basic
+      stateless: ['/api/**']
+      # usuários em memória (além dos do GORM)
+      users:
+        - {username: suporte, password: '{noop}suporte', roles: [ROLE_ADMIN]}
+      rest:
+        active: true
+        token:
+          storage:
+            jwt:
+              secret: 'segredo-de-desenvolvimento-troque-em-producao!'
+              expiration: 3600
+      interceptUrlMap:
+        - {pattern: '/', access: [permitAll]}
+        - {pattern: '/static/**', access: [permitAll]}
+        - {pattern: '/assets/**', access: [permitAll]}
+        - {pattern: '/async/**', access: [permitAll]}
+        - {pattern: '/login/**', access: [permitAll]}
+        - {pattern: '/ola/**', access: [permitAll]}
+        - {pattern: '/home/**', access: [permitAll]}
+        - {pattern: '/transacao/**', access: [permitAll]}
+        - {pattern: '/semPacote/**', access: [permitAll]}
+        - {pattern: '/erro/**', access: [permitAll]}
+        - {pattern: '/api/usuarios/**', httpMethod: GET, access: ['isAuthenticated()']}
+        - {pattern: '/api/**', access: [ROLE_ADMIN]}
+        - {pattern: '/usuario', access: [permitAll]}
+        - {pattern: '/usuario/index', access: [permitAll]}
+        - {pattern: '/usuario/index.json', access: [permitAll]}
+        - {pattern: '/usuario/show/**', access: ['isAuthenticated()']}
+        - {pattern: '/usuario/**', access: [ROLE_ADMIN]}
+        - {pattern: '/tarefa/**', access: ["hasAnyRole('ROLE_USER', 'ROLE_ADMIN')"]}
+        - {pattern: '/**', access: ['isAuthenticated()']}
+
+dataSource:
+  driverClassName: org.h2.Driver
+  username: sa
+  password: ''
+  dbCreate: create-drop
+  logSql: false
+  properties:
+    maximumPoolSize: 10
+
+---
+environments:
+  development:
+    dataSource:
+      url: jdbc:h2:mem:devDb;DB_CLOSE_DELAY=-1
+  test:
+    server:
+      port: 0
+    grox:
+      console:
+        enabled: true
+      async:
+        timeout: 2
+    dataSource:
+      url: jdbc:h2:mem:testDb;DB_CLOSE_DELAY=-1

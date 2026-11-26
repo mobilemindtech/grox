@@ -1,0 +1,24 @@
+plugins {
+    id 'groovy'
+    id 'java-gradle-plugin'
+}
+
+group = 'org.grox'
+version = '0.1.0'
+
+gradlePlugin {
+    plugins {
+        groxApp {
+            id = 'org.grox.app'
+            implementationClass = 'org.grox.gradle.GroxAppPlugin'
+            displayName = 'Grox application'
+            description = 'Layout grails-app/, views no classpath e pré-compilação de GSPs'
+        }
+        groxLib {
+            id = 'org.grox.lib'
+            implementationClass = 'org.grox.gradle.GroxLibPlugin'
+            displayName = 'Grox library'
+            description = 'Biblioteca de artefatos (domains, services, taglibs) no layout grails-app/'
+        }
+    }
+}

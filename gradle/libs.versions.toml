@@ -1,0 +1,99 @@
+# https://docs.gradle.org/current/userguide/version_catalogs.html#sec::toml-dependencies-format
+
+[versions]
+imgscalr = "4.2"
+ehcache = "3.12.0"
+flying-saucer = "9.9.5"
+amqp-client = "5.30.0"
+jedis = "7.4.1"
+jakarta-annotation = "3.0.0"
+jakarta-servlet = "6.1.0"
+commons-lang3 = "3.19.0"
+commons-dbcp = "1.4"
+flyway = "9.22.3"
+webpush = "5.1.1"
+bcprov = "1.70"
+aws = "2.33.11"
+groovy = "6.0.0"
+netty = "4.2.18.Final"
+slf4j = "2.0.20"
+gson = "2.13.1"
+junit = "6.1.3"
+sitemesh = "3.2.3"
+hibernate = "7.4.11.Final"
+hikari = "7.1.0"
+h2 = "2.5.252"
+javassist = "3.33.0-GA"
+lettuce = "7.8.0.RELEASE"
+bcrypt = "0.10.2"
+mysql = "26.7.0"
+poi = "5.5.1"
+commons-email = "1.6.0"
+# candidato app B (bibliotecas Java usadas pela app)
+solr-solrj = "9.9.0"
+json-lib = "2.4"
+commons-lang2 = "2.6"
+commonmark = "0.30.0"
+pug4j = "3.1.1"
+nimbus-jose = "10.10"
+
+[libraries]
+imgscalr = { module = "org.imgscalr:imgscalr-lib", version.ref = "imgscalr" }
+flying-saucer-pdf = { module = "org.xhtmlrenderer:flying-saucer-pdf", version.ref = "flying-saucer" }
+amqp-client = { module = "com.rabbitmq:amqp-client", version.ref = "amqp-client" }
+jedis = { module = "redis.clients:jedis", version.ref = "jedis" }
+jakarta-annotation-api = { module = "jakarta.annotation:jakarta.annotation-api", version.ref = "jakarta-annotation" }
+jakarta-servlet-api = { module = "jakarta.servlet:jakarta.servlet-api", version.ref = "jakarta-servlet" }
+commons-lang3 = { module = "org.apache.commons:commons-lang3", version.ref = "commons-lang3" }
+commons-dbcp = { module = "commons-dbcp:commons-dbcp", version.ref = "commons-dbcp" }
+flyway-core = { module = "org.flywaydb:flyway-core", version.ref = "flyway" }
+flyway-mysql = { module = "org.flywaydb:flyway-mysql", version.ref = "flyway" }
+webpush = { module = "nl.martijndwars:web-push", version.ref = "webpush" }
+bcprov = { module = "org.bouncycastle:bcprov-jdk15on", version.ref = "bcprov" }
+aws-bom = { module = "software.amazon.awssdk:bom", version.ref = "aws" }
+aws-s3 = { module = "software.amazon.awssdk:s3" }
+groovy-core = { module = "org.apache.groovy:groovy", version.ref = "groovy" }
+groovy-json = { module = "org.apache.groovy:groovy-json", version.ref = "groovy" }
+groovy-yaml = { module = "org.apache.groovy:groovy-yaml", version.ref = "groovy" }
+groovy-templates = { module = "org.apache.groovy:groovy-templates", version.ref = "groovy" }
+groovy-sql = { module = "org.apache.groovy:groovy-sql", version.ref = "groovy" }
+groovy-console = { module = "org.apache.groovy:groovy-console", version.ref = "groovy" }
+groovy-typecheckers = { module = "org.apache.groovy:groovy-typecheckers", version.ref = "groovy" }
+groovy-macro = { module = "org.apache.groovy:groovy-macro", version.ref = "groovy" }
+groovy-http-builder = { module = "org.apache.groovy:groovy-http-builder", version.ref = "groovy" }
+groovy-markdown = { module = "org.apache.groovy:groovy-markdown", version.ref = "groovy" }
+groovy-xml = { module = "org.apache.groovy:groovy-xml", version.ref = "groovy" }
+groovy-dateutil = { module = "org.apache.groovy:groovy-dateutil", version.ref = "groovy" }
+groovy-test-junit6 = { module = "org.apache.groovy:groovy-test-junit6", version.ref = "groovy" }
+
+netty-codec-http = { module = "io.netty:netty-codec-http", version.ref = "netty" }
+sitemesh = { module = "org.sitemesh:sitemesh", version.ref = "sitemesh" }
+hibernate-core = { module = "org.hibernate.orm:hibernate-core", version.ref = "hibernate" }
+hibernate-jcache = { module = "org.hibernate.orm:hibernate-jcache", version.ref = "hibernate" }
+ehcache = { module = "org.ehcache:ehcache", version.ref = "ehcache" }
+hikari = { module = "com.zaxxer:HikariCP", version.ref = "hikari" }
+h2 = { module = "com.h2database:h2", version.ref = "h2" }
+javassist = { module = "org.javassist:javassist", version.ref = "javassist" }
+lettuce = { module = "io.lettuce:lettuce-core", version.ref = "lettuce" }
+bcrypt = { module = "at.favre.lib:bcrypt", version.ref = "bcrypt" }
+mysql = { module = "com.mysql:mysql-connector-j", version.ref = "mysql" }
+poi = { module = "org.apache.poi:poi", version.ref = "poi" }
+poi-ooxml = { module = "org.apache.poi:poi-ooxml", version.ref = "poi" }
+commons-email = { module = "org.apache.commons:commons-email", version.ref = "commons-email" }
+solr-solrj = { module = "org.apache.solr:solr-solrj", version.ref = "solr-solrj" }
+json-lib = { module = "net.sf.json-lib:json-lib", version.ref = "json-lib" }
+commons-lang2 = { module = "commons-lang:commons-lang", version.ref = "commons-lang2" }
+commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }
+commonmark-ext-gfm-tables = { module = "org.commonmark:commonmark-ext-gfm-tables", version.ref = "commonmark" }
+commonmark-ext-gfm-strikethrough = { module = "org.commonmark:commonmark-ext-gfm-strikethrough", version.ref = "commonmark" }
+commonmark-ext-autolink = { module = "org.commonmark:commonmark-ext-autolink", version.ref = "commonmark" }
+commonmark-ext-heading-anchor = { module = "org.commonmark:commonmark-ext-heading-anchor", version.ref = "commonmark" }
+commonmark-ext-yaml-front-matter = { module = "org.commonmark:commonmark-ext-yaml-front-matter", version.ref = "commonmark" }
+pug4j = { module = "de.neuland-bfi:pug4j", version.ref = "pug4j" }
+nimbus-jose = { module = "com.nimbusds:nimbus-jose-jwt", version.ref = "nimbus-jose" }
+jcl-over-slf4j = { module = "org.slf4j:jcl-over-slf4j", version.ref = "slf4j" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+gson = { module = "com.google.code.gson:gson", version.ref = "gson" }
+slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
+junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junit-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit" }

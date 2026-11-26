@@ -1,0 +1,4 @@
+// Asset pipeline (servidor de assets em desenvolvimento ou pré-compilados)
+dependencies {
+    api project(':framework:grox-core')
+}

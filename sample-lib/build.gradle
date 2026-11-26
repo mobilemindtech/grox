@@ -1,0 +1,19 @@
+// Biblioteca de artefatos Grox (plugin org.grox.lib): domains, services e taglibs usados pelo sample-app,
+// fora do pacote da aplicação. É o formato do app-c-core (candidates/app C).
+plugins {
+    id 'org.grox.lib'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    api project(':framework')
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(27)
+    }
+}

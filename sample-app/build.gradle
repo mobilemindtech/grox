@@ -1,0 +1,36 @@
+plugins {
+    id 'org.grox.app'
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation project(':framework')
+    implementation project(':sample-lib')   // biblioteca org.grox.lib (artefatos em outro pacote)
+    runtimeOnly libs.slf4j.simple
+    runtimeOnly libs.h2
+    implementation libs.flying.saucer.pdf   // plugin rendering (pdfRenderingService)
+
+    testImplementation libs.groovy.test.junit6
+    testImplementation libs.groovy.http.builder   // cliente HTTP dos testes (groovy.http.HttpBuilder)
+    testImplementation libs.junit.jupiter
+    testRuntimeOnly libs.junit.launcher
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(27)
+    }
+}
+
+application {
+    mainClass = 'sample.Application'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    // cada classe de teste sobe a própria aplicação (o GORM é global na JVM)
+    forkEvery = 1
+}

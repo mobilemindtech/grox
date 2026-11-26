@@ -1,0 +1,12 @@
+// Núcleo sem Grails: atores, Netty, http, sessão (memória/Redis), config, roteamento, i18n, management,
+// async, services-ator, recarga e o SPI GroxModule
+dependencies {
+    api libs.groovy.core
+    api libs.groovy.json
+    api libs.groovy.yaml
+    api libs.slf4j.api
+    api libs.jakarta.annotation.api   // @PostConstruct em beans e services
+    api libs.jakarta.servlet.api      // só a API: request/response/sessão do Grox a implementam (sem container)
+    implementation libs.netty.codec.http
+    implementation libs.lettuce
+}

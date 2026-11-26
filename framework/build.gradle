@@ -1,0 +1,77 @@
+plugins {
+    id 'groovy'
+    id 'java-library'
+}
+
+// Agregador: depende de todos os módulos (sample-app e candidatos continuam com project(':framework')).
+// Os módulos ficam em framework/grox-*; ver docs/modularizacao.md. Os testes do framework ficam aqui.
+
+allprojects {
+    apply plugin: 'groovy'
+    apply plugin: 'java-library'
+
+    repositories {
+        mavenCentral()
+    }
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(27)
+        }
+    }
+}
+
+subprojects {
+    // o código do framework compila como antes da divisão: sem as ASTs globais dos módulos de que depende
+    // (WhereQueryTransformation, ArtefactTransformation), que são para o código das aplicações
+    tasks.withType(GroovyCompile).configureEach {
+        groovyOptions.configurationScript = rootProject.file('framework/gradle/compilador-modulos.groovy')
+    }
+}
+
+dependencies {
+    api project(':framework:grox-core')
+    api project(':framework:grox-gorm')
+    api project(':framework:grox-gsp')
+    api project(':framework:grox-assets')
+    api project(':framework:grox-security')
+    api project(':framework:grox-security-gorm')
+    api project(':framework:grox-grails')
+    api project(':framework:grox-grails-plugins')
+    api project(':framework:grox-dsl')
+    api project(':framework:grox-pug')
+    api project(':framework:grox-markdown')
+
+    testImplementation libs.poi.ooxml
+    testImplementation libs.jedis
+    testImplementation libs.gson
+    testImplementation libs.amqp.client
+    testImplementation libs.flying.saucer.pdf
+    testImplementation libs.netty.codec.http
+    testImplementation libs.sitemesh
+    testImplementation libs.lettuce
+    testImplementation libs.bcrypt
+
+    testImplementation libs.groovy.test.junit6
+    testImplementation libs.junit.jupiter
+    testRuntimeOnly libs.junit.launcher
+    testRuntimeOnly libs.slf4j.simple
+    testRuntimeOnly libs.h2
+}
+
+// domain classes de teste precisam estar em grails-app/domain para a AST aplicar o GORM
+sourceSets {
+    test {
+        groovy {
+            srcDir 'src/test/grails-app/domain'
+            srcDir 'src/test/grails-app/jobs'
+        }
+    }
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+    systemProperty 'grox.env.default', 'development'
+    // ArquiteturaTest: regrava a lista de violações conhecidas
+    if (System.getProperty('arquitetura.atualizar')) systemProperty 'arquitetura.atualizar', 'true'
+}

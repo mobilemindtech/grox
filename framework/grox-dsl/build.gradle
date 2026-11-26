@@ -1,0 +1,8 @@
+// Rotas sem o layout grails-app/: por closure (routes { get('/x') { ... } }) e por anotação (@Handler, @Get...),
+// sobre o pipeline HTTP do core, com GORM, GSP e segurança
+dependencies {
+    api project(':framework:grox-core')
+    api project(':framework:grox-gorm')
+    api project(':framework:grox-gsp')
+    api project(':framework:grox-security')
+}

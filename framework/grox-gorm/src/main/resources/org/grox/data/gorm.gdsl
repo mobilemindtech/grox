@@ -1,0 +1,148 @@
+// Autocomplete do IntelliJ IDEA para as domain classes do Grox. O IDEA lê os arquivos *.gdsl dos jars do classpath;
+// nada precisa ser configurado na aplicação. Vale para as classes de grails-app/domain (ou grox-app/domain) e as
+// anotadas com @grails.gorm.annotation.Entity: a API do GORM com o tipo da domain, id/version, as coleções do
+// hasMany (addTo*/removeFrom*) e os dynamic finders de cada propriedade.
+// As listas STATIC e INSTANCE espelham org.grox.data.GormEntity: o GdslTest falha se um método da trait faltar aqui.
+
+// [nome, retorno, parâmetros]; retorno: D = a domain, List = List<D>, Criteria = DetachedCriteria<D>, ou o tipo
+def STATIC = [
+    ['get', 'D', [id: 'java.io.Serializable']],
+    ['read', 'D', [id: 'java.io.Serializable']],
+    ['load', 'D', [id: 'java.io.Serializable']],
+    ['exists', 'boolean', [id: 'java.io.Serializable']],
+    ['getAll', 'List', [ids: 'java.util.Collection']],
+    ['list', 'List', [:]],
+    ['list', 'List', [params: 'java.util.Map']],
+    ['count', 'long', [:]],
+    ['first', 'D', [:]],
+    ['first', 'D', [sort: 'java.lang.String']],
+    ['first', 'D', [args: 'java.util.Map']],
+    ['last', 'D', [:]],
+    ['last', 'D', [sort: 'java.lang.String']],
+    ['last', 'D', [args: 'java.util.Map']],
+    ['findWhere', 'D', [criteria: 'java.util.Map']],
+    ['findAllWhere', 'List', [criteria: 'java.util.Map']],
+    ['findAllWhere', 'List', [criteria: 'java.util.Map', params: 'java.util.Map']],
+    ['find', 'D', [hql: 'java.lang.String']],
+    ['find', 'D', [hql: 'java.lang.String', params: 'java.lang.Object']],
+    ['find', 'D', [criteria: 'groovy.lang.Closure']],
+    ['findAll', 'List', [:]],
+    ['findAll', 'List', [hql: 'java.lang.String']],
+    ['findAll', 'List', [hql: 'java.lang.String', params: 'java.lang.Object']],
+    ['findAll', 'List', [hql: 'java.lang.String', params: 'java.lang.Object', pagination: 'java.util.Map']],
+    ['findAll', 'List', [criteria: 'groovy.lang.Closure']],
+    ['findAll', 'List', [params: 'java.util.Map', criteria: 'groovy.lang.Closure']],
+    ['executeQuery', 'java.util.List', [hql: 'java.lang.String']],
+    ['executeQuery', 'java.util.List', [hql: 'java.lang.String', params: 'java.lang.Object']],
+    ['executeQuery', 'java.util.List', [hql: 'java.lang.String', params: 'java.lang.Object', pagination: 'java.util.Map']],
+    ['executeUpdate', 'int', [hql: 'java.lang.String']],
+    ['executeUpdate', 'int', [hql: 'java.lang.String', params: 'java.lang.Object']],
+    ['withTransaction', 'java.lang.Object', [body: 'groovy.lang.Closure']],
+    ['withNewTransaction', 'java.lang.Object', [body: 'groovy.lang.Closure']],
+    ['withSession', 'java.lang.Object', [body: 'groovy.lang.Closure']],
+    ['withNewSession', 'java.lang.Object', [body: 'groovy.lang.Closure']],
+    ['withTenant', 'java.lang.Object', [tenantId: 'java.io.Serializable', body: 'groovy.lang.Closure']],
+    ['withoutHibernateFilters', 'java.lang.Object', [body: 'groovy.lang.Closure']],
+    ['withoutHibernateFilter', 'java.lang.Object', [name: 'java.lang.String', body: 'groovy.lang.Closure']],
+    ['withHibernateFilters', 'java.lang.Object', [body: 'groovy.lang.Closure']],
+    ['enableHibernateFilter', 'void', [name: 'java.lang.String']],
+    ['disableHibernateFilter', 'void', [name: 'java.lang.String']],
+    ['where', 'Criteria', [criteria: 'groovy.lang.Closure']],
+    ['whereAny', 'Criteria', [criteria: 'groovy.lang.Closure']],
+    ['createCriteria', 'org.grox.data.query.CriteriaBuilder', [:]],
+    ['withCriteria', 'List', [criteria: 'groovy.lang.Closure']],
+    ['withCriteria', 'List', [params: 'java.util.Map', criteria: 'groovy.lang.Closure']],
+]
+
+def INSTANCE = [
+    ['save', 'D', [:]],
+    ['save', 'D', [options: 'java.util.Map']],
+    ['delete', 'void', [:]],
+    ['delete', 'void', [options: 'java.util.Map']],
+    ['refresh', 'D', [:]],
+    ['merge', 'D', [:]],
+    ['merge', 'D', [options: 'java.util.Map']],
+    ['attach', 'D', [:]],
+    ['discard', 'D', [:]],
+    ['isAttached', 'boolean', [:]],
+    ['isDirty', 'boolean', [:]],
+    ['isDirty', 'boolean', [property: 'java.lang.String']],
+    ['getPersistentValue', 'java.lang.Object', [property: 'java.lang.String']],
+    ['getDirtyPropertyNames', 'java.util.List<java.lang.String>', [:]],
+    ['ident', 'java.lang.Object', [:]],
+    ['validate', 'boolean', [:]],
+    ['validate', 'boolean', [fields: 'java.util.List']],
+    ['hasErrors', 'boolean', [:]],
+    ['clearErrors', 'void', [:]],
+]
+
+/** Operadores dos dynamic finders, por tipo da propriedade: [sufixo, aridade]. */
+def OPERATORS_ALL = [['', 1], ['NotEqual', 1], ['InList', 1], ['IsNull', 0], ['IsNotNull', 0]]
+def OPERATORS_STRING = [['Like', 1], ['Ilike', 1], ['NotLike', 1]]
+def OPERATORS_COMPARABLE = [['GreaterThan', 1], ['GreaterThanEquals', 1], ['LessThan', 1], ['LessThanEquals', 1], ['Between', 2]]
+def COMPARABLE = ['int', 'long', 'short', 'double', 'float', 'java.lang.Integer', 'java.lang.Long', 'java.lang.Short',
+                  'java.lang.Double', 'java.lang.Float', 'java.math.BigDecimal', 'java.math.BigInteger', 'java.util.Date',
+                  'java.time.LocalDate', 'java.time.LocalDateTime', 'java.time.Instant'] as Set
+
+def domainContext = context(ctype: 'java.lang.Object')
+
+contributor(domainContext) {
+    def c = psiClass
+    if (c == null || c.qualifiedName == null || c.qualifiedName.startsWith('java.')) return
+    String path = c.containingFile?.originalFile?.virtualFile?.path ?: ''
+    boolean inDomainDir = path ==~ /.*\/(grails-app|grox-app)\/domain\/.*/
+    boolean annotated = c.modifierList?.findAnnotation('grails.gorm.annotation.Entity') != null
+    boolean compiled = c.interfaces.any { it.qualifiedName == 'org.grox.data.GormEntity' }
+    if (!inDomainDir && !annotated && !compiled) return
+    // implements GormEntity<Livro> explícito: o IDE já tem os tipos pela trait
+    if (c.implementsListTypes.any { it.canonicalText.startsWith('org.grox.data.GormEntity<') || it.canonicalText.startsWith('GormEntity<') }) return
+
+    String d = c.qualifiedName
+    String pkg = d.contains('.') ? d.substring(0, d.lastIndexOf('.') + 1) : ''
+    def typeOf = { String kind ->
+        kind == 'D' ? d : kind == 'List' ? "java.util.List<${d}>".toString() : kind == 'Criteria' ? "grails.gorm.DetachedCriteria<${d}>".toString() : kind
+    }
+    STATIC.each { m -> method name: m[0], type: typeOf(m[1]), params: m[2], isStatic: true }
+    INSTANCE.each { m -> method name: m[0], type: typeOf(m[1]), params: m[2] }
+    property name: 'errors', type: 'org.springframework.validation.Errors'
+    property name: 'properties', type: 'java.util.Map'
+
+    // id e version, que a AST acrescenta
+    def declared = c.fields.findAll { !it.hasModifierProperty('static') }
+    if (!declared.any { it.name == 'id' }) property name: 'id', type: 'java.lang.Long'
+    if (!declared.any { it.name == 'version' }) property name: 'version', type: 'java.lang.Long'
+
+    // hasMany = [livros: Livro]: a coleção e addToLivros/removeFromLivros
+    def hasMany = c.findFieldByName('hasMany', false)
+    if (hasMany != null) {
+        (hasMany.text =~ /(\w+)\s*:\s*([\w.]+)/).each { m ->
+            String name = m[1]
+            String type = m[2]
+            String element = type.contains('.') ? type : pkg + type
+            String cap = name.capitalize()
+            property name: name, type: "java.util.Set<${element}>".toString()
+            method name: "addTo${cap}".toString(), type: d, params: [item: element]
+            method name: "removeFrom${cap}".toString(), type: d, params: [item: element]
+        }
+    }
+
+    // dynamic finders: findBy<Prop><Operador>, findAllBy..., countBy... e listOrderBy<Prop>
+    def props = declared.collect { [name: it.name, type: it.type.canonicalText] }
+    if (!props.any { it.name == 'id' }) props << [name: 'id', type: 'java.lang.Long']
+    props.each { p ->
+        String cap = p.name.capitalize()
+        def ops = OPERATORS_ALL + (p.type == 'java.lang.String' ? OPERATORS_STRING : []) + (p.type in COMPARABLE ? OPERATORS_COMPARABLE : [])
+        ops.each { op ->
+            Map args = [:]
+            if (op[1] == 1) args[p.name] = op[0] == 'InList' ? 'java.util.Collection' : p.type
+            if (op[1] == 2) { args.de = p.type; args.ate = p.type }
+            String suffix = cap + op[0]
+            method name: "findBy${suffix}".toString(), type: d, params: args, isStatic: true
+            method name: "findAllBy${suffix}".toString(), type: "java.util.List<${d}>".toString(), params: args, isStatic: true
+            method name: "findAllBy${suffix}".toString(), type: "java.util.List<${d}>".toString(), params: args + [params: 'java.util.Map'], isStatic: true
+            method name: "countBy${suffix}".toString(), type: 'long', params: args, isStatic: true
+        }
+        method name: "listOrderBy${cap}".toString(), type: "java.util.List<${d}>".toString(), params: [:], isStatic: true
+        method name: "listOrderBy${cap}".toString(), type: "java.util.List<${d}>".toString(), params: [params: 'java.util.Map'], isStatic: true
+    }
+}

@@ -1,0 +1,6 @@
+// Motor GSP, SiteMesh e as TagLibs nativas
+dependencies {
+    api project(':framework:grox-core')
+    implementation libs.sitemesh
+    api libs.groovy.xml   // DSL de HTML (MarkupBuilder)
+}

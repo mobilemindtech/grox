@@ -1,0 +1,6 @@
+// Motor de segurança: filtro, regras, JWT, CSRF, bcrypt e os pontos de extensão
+dependencies {
+    api project(':framework:grox-core')
+    implementation libs.bcrypt
+    implementation libs.lettuce   // tokens revogados no Redis
+}

@@ -1,0 +1,10 @@
+// Compatibilidade com o Grails: controllers, UrlMappings, interceptors, AST do layout grails-app/, fachadas
+dependencies {
+    api project(':framework:grox-core')
+    api project(':framework:grox-gorm')
+    api project(':framework:grox-gsp')
+    api project(':framework:grox-assets')
+    api project(':framework:grox-security')
+    api project(':framework:grox-security-gorm')
+    implementation libs.netty.codec.http
+}

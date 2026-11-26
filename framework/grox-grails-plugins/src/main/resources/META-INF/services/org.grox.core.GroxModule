@@ -1,0 +1,8 @@
+org.grox.plugins.springsecurity.SpringSecurityModule
+org.grox.plugins.assetpipeline.AssetPipelineModule
+org.grox.plugins.redis.RedisModule
+org.grox.plugins.rabbitmq.RabbitModule
+org.grox.plugins.rendering.RenderingModule
+org.grox.plugins.auditlog.AuditLogModule
+org.grox.plugins.quartz.JobsModule
+org.grox.plugins.console.ConsoleModule
