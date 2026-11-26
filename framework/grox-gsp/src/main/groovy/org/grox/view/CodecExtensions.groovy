@@ -6,15 +6,20 @@ import org.grox.http.SafeHtml
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 
-/** Extension module: {@code encodeAsHTML()}, {@code encodeAsURL()}, {@code encodeAsJSON()}... */
+/**
+ * Extension module: {@code encodeAsHTML()}, {@code encodeAsURL()}, {@code encodeAsJSON()}...
+ * <p>Como o {@code EncodingStateRegistry} do Grails, as strings devolvidas por {@code encodeAsHTML},
+ * {@code encodeAsJavaScript} e {@code encodeAsURL} ficam registradas na requisição (por identidade), e o
+ * {@code ${}} da GSP não as codifica de novo. A saída desses três nunca tem {@code < > " '} crus.
+ */
 class CodecExtensions {
 
     static String encodeAsHTML(Object self) {
-        Html.escape(self)
+        Html.markEncoded(Html.escape(self))
     }
 
     static String encodeAsURL(Object self) {
-        self == null ? '' : URLEncoder.encode(self.toString(), StandardCharsets.UTF_8)
+        Html.markEncoded(self == null ? '' : URLEncoder.encode(self.toString(), StandardCharsets.UTF_8))
     }
 
     /** Conversão do {@link #encodeAsJSON}; o módulo Grails troca pelo JSON dele (entidades, erros). */
@@ -24,11 +29,12 @@ class CodecExtensions {
         json.apply(self)
     }
 
+    /** Como o {@code JavaScriptCodec} do Grails: aspas, {@code &}, {@code <} e {@code >} como {@code \\uXXXX}. */
     static String encodeAsJavaScript(Object self) {
         if (self == null) return ''
-        self.toString()
-                .replace('\\', '\\\\').replace('"', '\\"').replace('\'', "\\'")
-                .replace('\n', '\\n').replace('\r', '\\r').replace('<', '\\u003C').replace('>', '\\u003E')
+        Html.markEncoded(self.toString()
+                .replace('\\', '\\\\').replace('"', '\\u0022').replace('\'', '\\u0027').replace('&', '\\u0026')
+                .replace('\n', '\\n').replace('\r', '\\r').replace('<', '\\u003C').replace('>', '\\u003E'))
     }
 
     static SafeHtml encodeAsRaw(Object self) {

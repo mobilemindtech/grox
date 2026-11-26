@@ -725,7 +725,7 @@ class AuditoriaInterceptor {
 
     boolean before() { true }                   // false interrompe (renderize/redirecione antes)
     boolean after() { model.extra = 1; true }   // false impede a view; model e view podem ser alterados
-    void afterView() { }                        // depois da renderização
+    void afterView() { }                        // depois da renderização; também com exceção (throwable)
 }
 ```
 

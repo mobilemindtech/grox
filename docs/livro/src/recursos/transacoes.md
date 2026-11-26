@@ -25,7 +25,7 @@ livro.delete(flush: true)
 
 `save()` aplica os timestamps, chama `beforeInsert`/`beforeUpdate`, valida e faz `persist` (ou `merge`, se a entidade estiver destacada). Tudo dentro de `withTransaction`: participa da transação aberta ou abre uma e faz commit ao final.
 
-Violações de integridade no flush viram `DataIntegrityViolationException` (o nome do Spring).
+Violações de restrição do banco viram `DataIntegrityViolationException` (o nome do Spring) em todos os pontos onde o SQL sai: no `save` (com id `IDENTITY`, o `INSERT` sai na hora), no `delete`, no `flush`, no `executeUpdate` e no commit (alterações feitas só por dirty checking).
 
 ### Alterações sem `save()`
 
@@ -53,7 +53,18 @@ Livro.withSession { session -> session.flush() }
 Livro.withNewSession { session -> ... }
 ```
 
-`withTransaction` participa de uma transação já aberta ou abre uma nova.
+`withTransaction` participa de uma transação já aberta ou abre uma nova. Como no Spring e no Grails, uma participante que lança exceção (ou chama `status.setRollbackOnly()`) marca a transação **inteira**: mesmo que quem chamou capture a exceção, a externa desfaz tudo no fim e lança `UnexpectedRollbackException`. Só o `setRollbackOnly()` da própria transação externa desfaz sem exceção.
+
+```groovy
+Livro.withTransaction {
+    new Livro(titulo: 'A').save()
+    try {
+        pagamentoService.debitar()   // @Transactional: participa; grava e depois lança
+    } catch (e) {
+        log.warn 'falhou'           // capturar não salva o commit: nada é gravado, e sai UnexpectedRollbackException
+    }
+}
+```
 
 ## Services transacionais
 
@@ -73,7 +84,7 @@ class PedidoService {
 - Na classe ou em métodos. Cada chamada **externa** roda em transação; chamadas internas (`this.x()`) não passam pelo proxy.
 - O `@org.springframework.transaction.annotation.Transactional` também vale.
 - `propagation = Propagation.REQUIRES_NEW` roda em sessão e transação novas. `SUPPORTS`, `NOT_SUPPORTED` e `NEVER` não abrem transação; `MANDATORY` exige uma em andamento.
-- `isolation`, `timeout`, `rollbackFor` e `noRollbackFor` são aceitos, mas ainda sem efeito. `readOnly` não muda o comportamento da sessão. `static transactional` não é suportado.
+- `isolation`, `timeout`, `rollbackFor` e `noRollbackFor` são aceitos, mas ainda sem efeito. `@ReadOnly` e `readOnly = true` abrem a transação com a sessão em `FlushMode.MANUAL` e as entidades carregadas como somente leitura: alterações feitas nelas não vão ao banco. Participando de uma transação de escrita já aberta, vale o modo dela, como no Spring. `static transactional` não é suportado.
 - `TransactionAspectSupport.currentTransactionStatus()` devolve o status corrente (`NoTransactionException` sem transação).
 - Métodos sem anotação num service que tem outros transacionais só delegam ao objeto real, com as dependências injetadas.
 

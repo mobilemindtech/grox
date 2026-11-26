@@ -41,6 +41,129 @@ class GormTest {
         Autor.executeUpdate('delete from Autor')
     }
 
+    static class LeituraService {
+        @grails.gorm.transactions.ReadOnly
+        String exibir(Long id) {
+            def a = Autor.get(id)
+            a.nome = a.nome.toUpperCase()   // ajuste só para exibição
+            a.nome
+        }
+
+        @grails.gorm.transactions.Transactional(readOnly = true)
+        String exibirTx(Long id) { exibir(id) }
+
+        @grails.gorm.transactions.Transactional
+        void renomear(Long id, String nome) { Autor.get(id).nome = nome }
+    }
+
+    @Test
+    void 'ReadOnly nao grava alteracoes feitas nas entidades'() {
+        def target = new LeituraService()
+        def proxy = (LeituraService) org.grox.service.ServiceProxies.create(LeituraService, target, false,
+                org.grox.service.ServiceRegistry.interceptors(LeituraService, target), [])
+        assert org.grox.data.GormServiceInterceptor.readOnlyMethods(LeituraService, ['exibir', 'exibirTx', 'renomear'] as Set) == ['exibir', 'exibirTx'] as Set
+        Long id = new Autor(nome: 'Ana').save(failOnError: true, flush: true).id
+        Closure<String> noBanco = { Persistence.withNewSession { Autor.get(id).nome } }
+        assert Persistence.withSession { proxy.exibir(id) } == 'ANA'
+        assert noBanco() == 'Ana'   // antes: o commit fazia flush e gravava ANA
+        assert Persistence.withSession { proxy.exibirTx(id) } == 'ANA' && noBanco() == 'Ana'
+        Persistence.withSession { proxy.renomear(id, 'Bia') }
+        assert noBanco() == 'Bia'
+        // participando de uma transação de escrita, vale o modo dela (como no Spring)
+        Autor.withTransaction { proxy.exibir(id) }
+        assert noBanco() == 'BIA'
+    }
+
+    @Test
+    void 'binding de hasMany por ids resolve as entidades e ajusta o belongsTo'() {
+        def ana = new Autor(nome: 'Ana').save(failOnError: true, flush: true)
+        def ids = ['A', 'B', 'C'].collect { new Livro(titulo: it, autor: ana).save(failOnError: true, flush: true).id }
+        def bia = new Autor(nome: 'Bia').save(failOnError: true, flush: true)
+        // <g:select multiple name="livros">: lista de ids em texto (antes: Strings dentro do Set e o save quebrava)
+        Autor.withTransaction {
+            def b = Autor.get(bia.id)
+            org.grox.data.binding.DataBinder.bind(b, [livros: [ids[0].toString(), ids[1].toString(), 'nao-e-id']])
+            assert b.livros*.titulo.sort() == ['A', 'B'] && b.livros.every { it instanceof Livro && it.autor.is(b) }
+            b.save(failOnError: true, flush: true)
+        }
+        assert Persistence.withNewSession { Livro.findAllByAutor(Autor.get(bia.id))*.titulo.sort() } == ['A', 'B']
+        // JSON [{"id": n}] e um id só: a coleção existente é atualizada (removeFrom/addTo), não trocada
+        Autor.withTransaction { status ->
+            def b = Autor.get(bia.id)
+            def colecao = b.livros
+            org.grox.data.binding.DataBinder.bind(b, [livros: [[id: ids[1]], [id: ids[2]]]])
+            assert b.livros.is(colecao) && b.livros*.titulo.sort() == ['B', 'C']
+            org.grox.data.binding.DataBinder.bind(b, [livros: ids[2].toString()])
+            assert b.livros*.titulo == ['C']
+            status.setRollbackOnly()   // o A e o B ficariam sem autor (belongsTo obrigatório)
+        }
+    }
+
+    @Test
+    void 'violacao de restricao do banco vira DataIntegrityViolationException em todos os caminhos'() {
+        def ana = new Autor(nome: 'Ana', email: 'ana@x.com').save(failOnError: true, flush: true)
+        new Livro(titulo: 'Groovy', autor: ana).save(failOnError: true, flush: true)
+        new Autor(nome: 'Bia', email: 'bia@x.com').save(failOnError: true, flush: true)
+        // HQL: chave estrangeira
+        assertThrows(org.springframework.dao.DataIntegrityViolationException) { Autor.executeUpdate('delete from Autor') }
+        // save sem validação: o INSERT (id IDENTITY) sai no persist; antes vinha a ConstraintViolationException do Hibernate
+        assertThrows(org.springframework.dao.DataIntegrityViolationException) {
+            Autor.withTransaction { new Autor(nome: 'Dup', email: 'ana@x.com').save(validate: false) }
+        }
+        // alteração por dirty checking: o UPDATE sai no commit
+        assertThrows(org.springframework.dao.DataIntegrityViolationException) {
+            Autor.withTransaction { Autor.findByNome('Bia').email = 'ana@x.com' }
+        }
+        assert Persistence.withNewSession { Autor.findByNome('Bia').email } == 'bia@x.com'
+    }
+
+    @Test
+    void 'transacao participante que falha desfaz a externa inteira, como no Spring'() {
+        Closure<List<String>> nomes = { Persistence.withNewSession { Autor.list()*.nome.sort() } }
+        // exceção capturada numa participante: antes, a externa fazia commit do que a interna gravou
+        def e = assertThrows(org.springframework.transaction.UnexpectedRollbackException) {
+            Autor.withTransaction {
+                new Autor(nome: 'Externo').save(failOnError: true)
+                try {
+                    Autor.withTransaction {
+                        new Autor(nome: 'Interno').save(failOnError: true, flush: true)
+                        throw new IllegalStateException('falhou')
+                    }
+                } catch (IllegalStateException ignored) {
+                }
+            }
+        }
+        assert e.message.contains('rollback-only') && nomes() == []
+        // setRollbackOnly() na participante: também desfaz tudo e avisa
+        assertThrows(org.springframework.transaction.UnexpectedRollbackException) {
+            Autor.withTransaction {
+                new Autor(nome: 'Externo').save(failOnError: true)
+                Autor.withTransaction { status -> status.setRollbackOnly() }
+            }
+        }
+        assert nomes() == []
+        // setRollbackOnly() na própria externa: rollback sem exceção
+        Autor.withTransaction { status ->
+            new Autor(nome: 'Externo').save(failOnError: true)
+            status.setRollbackOnly()
+        }
+        assert nomes() == []
+        // exceção que sai da externa: rollback e a exceção original
+        assertThrows(IllegalArgumentException) {
+            Autor.withTransaction {
+                new Autor(nome: 'Externo').save(failOnError: true)
+                Autor.withTransaction { throw new IllegalArgumentException('x') }
+            }
+        }
+        assert nomes() == []
+        // sem falha: commit das duas
+        Autor.withTransaction {
+            new Autor(nome: 'Externo').save(failOnError: true)
+            Autor.withTransaction { new Autor(nome: 'Interno').save(failOnError: true) }
+        }
+        assert nomes() == ['Externo', 'Interno']
+    }
+
     @Test
     void 'hasMany de valores simples com os nomes do GORM'() {
         def e = new org.grox.testdomain.Etiquetado(nome: 'x', tags: ['b', 'a'], numeros: [3, 1] as Set)
@@ -279,6 +402,29 @@ class GormTest {
         }
         def pe = datastore.mappingContext.getPersistentEntity(org.grox.testdomain.Motor.name).getPropertyByName('carro')
         assert pe instanceof org.grails.datastore.mapping.model.types.OneToOne && !pe.owningSide
+    }
+
+    @Test
+    void 'sort por associacao usa left join e sort invalido de params e ignorado'() {
+        Livro.withTransaction {
+            def a = new org.grox.testdomain.Carro(modelo: 'ordem-a')
+            a.motor = new org.grox.testdomain.Motor(serie: 'ordem-z', carro: a)
+            a.save(failOnError: true)
+            new org.grox.testdomain.Carro(modelo: 'ordem-b').save(failOnError: true, flush: true)
+        }
+        try {
+            def q = org.grox.testdomain.Carro.where { modelo in ['ordem-a', 'ordem-b'] }
+            // antes: inner join, e o carro sem motor sumia
+            assert q.list(sort: 'motor.serie')*.modelo as Set == ['ordem-a', 'ordem-b'] as Set
+            def pagina = q.list(max: 10, sort: 'motor.serie', order: 'desc')
+            assert pagina.size() == 2 && pagina.totalCount == 2   // antes: 1 linha e totalCount 2
+            assert q.list(sort: 'motor.naoExiste')*.modelo.size() == 2   // vindo de params: ignorado (antes, 500)
+            // o filtro pela associação continua sendo inner join
+            assert org.grox.testdomain.Carro.where { motor.serie == 'ordem-z' }.list(sort: 'motor.serie')*.modelo == ['ordem-a']
+        } finally {
+            org.grox.testdomain.Carro.executeUpdate("delete from Carro where modelo like 'ordem-%'")
+            org.grox.testdomain.Motor.executeUpdate("delete from Motor where serie = 'ordem-z'")
+        }
     }
 
     @Test

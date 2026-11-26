@@ -90,4 +90,15 @@ class RecursosTest {
         def interceptors = app.webContext.interceptors.interceptors
         assert interceptors*.getClass()*.simpleName == ['AuditoriaInterceptor', 'MavInterceptor', 'UsuarioInterceptor']   // mesma order: pelo nome
     }
+
+    @Test
+    void 'afterView roda tambem quando a action ou a promessa falha, com o throwable'() {
+        def auditoria = app.webContext.interceptors.interceptors.find { it.getClass().simpleName == 'AuditoriaInterceptor' }
+        admin.page('/')
+        assert auditoria.ultimoAfterView == 'home/index:null'
+        assert admin.page('/home/falha').status() == 500
+        assert auditoria.ultimoAfterView == 'home/falha:IllegalStateException'   // antes: não rodava
+        new TestClient(base).withToken('admin', 'admin').send('GET', '/async/falhaAsync', null, [Accept: 'application/json'])
+        assert auditoria.ultimoAfterView?.startsWith('async/falhaAsync:') && !auditoria.ultimoAfterView.endsWith(':null')
+    }
 }

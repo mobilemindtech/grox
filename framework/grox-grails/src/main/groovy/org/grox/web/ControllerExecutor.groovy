@@ -21,6 +21,7 @@ import org.grox.http.GroxResponse
  * é concluída (view, interceptors after/afterView) quando ela completar. Estático: roda em toda requisição.
  */
 @groovy.transform.CompileStatic
+@groovy.util.logging.Slf4j
 class ControllerExecutor {
 
     final ControllerArtefact artefact
@@ -42,29 +43,59 @@ class ControllerExecutor {
                 SecurityContextHolder.with(auth) { Persistence.withSessionIfAvailable { runAction(controller, wr) } }
             }
         }
-        if (pending instanceof List) return continueAsync(wr, auth, (CompletableFuture) pending[0], (List<InterceptorApi>) pending[1])
+        if (pending instanceof List) {
+            List p = (List) pending
+            return continueAsync(wr, auth, (CompletableFuture) p[0], (List<InterceptorApi>) p[1], (List<InterceptorApi>) p[2])
+        }
         wr.finish()
         wr.response
     }
 
     /** Conclui a resposta quando a promessa completa (fora do ator, com a própria sessão de dados). */
-    private CompletableFuture<GroxResponse> continueAsync(WebRequest wr, Authentication auth, CompletableFuture future, List<InterceptorApi> interceptors) {
+    private CompletableFuture<GroxResponse> continueAsync(WebRequest wr, Authentication auth, CompletableFuture future,
+                                                          List<InterceptorApi> interceptors, List<InterceptorApi> passed) {
         int timeout = ctx.asyncTimeoutSeconds
         ((CompletableFuture<Object>) future).orTimeout(timeout, TimeUnit.SECONDS).handleAsync({ Object value, Throwable err ->
             Throwable e = err instanceof CompletionException && err.cause != null ? err.cause : err
-            if (e instanceof TimeoutException) {
-                wr.response.sendError(503, "A action assíncrona não terminou em ${timeout}s".toString())
-                return wr.response
-            }
-            if (e != null) throw new CompletionException(e)
-            withAppClassLoader {
-                RequestContext.with(wr) {
-                    SecurityContextHolder.with(auth) { Persistence.withSessionIfAvailable { complete(wr, value, interceptors) } }
+            Throwable failure = e instanceof TimeoutException ? null : e
+            try {
+                if (e instanceof TimeoutException) {
+                    wr.response.sendError(503, "A action assíncrona não terminou em ${timeout}s".toString())
+                    return wr.response
                 }
+                if (e != null) throw new CompletionException(e)
+                withAppClassLoader {
+                    RequestContext.with(wr) {
+                        SecurityContextHolder.with(auth) { Persistence.withSessionIfAvailable { complete(wr, value, interceptors) } }
+                    }
+                }
+                wr.finish()
+                return wr.response
+            } catch (Throwable t) {
+                if (failure == null) failure = t instanceof CompletionException && t.cause != null ? t.cause : t
+                throw t
+            } finally {
+                Throwable f = failure
+                withAppClassLoader { RequestContext.with(wr) { SecurityContextHolder.with(auth) { afterView(wr, passed, f) } } }
             }
-            wr.finish()
-            wr.response
         } as BiFunction<Object, Throwable, GroxResponse>, AsyncSupport.executor)
+    }
+
+    /**
+     * {@code afterView()} dos interceptors cujo {@code before()} passou, em ordem inversa, como o
+     * {@code afterCompletion} do Spring: também quando a action ou a view lançou exceção (em {@code throwable}).
+     * Uma exceção num {@code afterView} vai para o log e não esconde a da requisição.
+     */
+    private static void afterView(WebRequest wr, List<InterceptorApi> passed, Throwable error) {
+        if (passed.isEmpty()) return
+        if (error != null && wr.request.getAttribute('exception') == null) wr.request.setAttribute('exception', error)
+        for (InterceptorApi i : passed.reverse()) {
+            try {
+                i.afterView()
+            } catch (Throwable t) {
+                log.error("afterView de ${i.getClass().name} falhou", t)
+            }
+        }
     }
 
     /**
@@ -97,17 +128,31 @@ class ControllerExecutor {
             return
         }
         List<InterceptorApi> interceptors = ctx.interceptors?.matching(wr) ?: []
-        wr.deferViews = true
-        for (InterceptorApi i : interceptors) {
-            if (!i.before()) {
-                ControllerSupport.renderPendingView(wr)
-                return null
+        List<InterceptorApi> passed = []
+        boolean async = false
+        Throwable error = null
+        try {
+            wr.deferViews = true
+            for (InterceptorApi i : interceptors) {
+                if (!i.before()) {
+                    ControllerSupport.renderPendingView(wr)
+                    return null
+                }
+                passed << i
             }
+            Object result = action.invoke(controller, action.bindArguments(wr, autowirer))
+            if (GroxPromise.isAsync(result)) {
+                async = true   // o afterView roda quando a promessa completar
+                return [GroxPromise.toFuture(result), interceptors, passed]
+            }
+            complete(wr, result, interceptors)
+            return null
+        } catch (Throwable t) {
+            error = t
+            throw t
+        } finally {
+            if (!async) afterView(wr, passed, error)
         }
-        Object result = action.invoke(controller, action.bindArguments(wr, autowirer))
-        if (GroxPromise.isAsync(result)) return [GroxPromise.toFuture(result), interceptors]
-        complete(wr, result, interceptors)
-        null
     }
 
     /** View padrão (Map → modelo), interceptors after, view adiada e afterView. */
@@ -124,6 +169,5 @@ class ControllerExecutor {
             }
         }
         ControllerSupport.renderPendingView(wr)
-        interceptors.reverse().each { it.afterView() }
     }
 }

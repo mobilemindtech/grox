@@ -45,11 +45,14 @@ class Tenants {
     }
 
     private static <T> T run(Object tenant, Closure<T> body) {
+        def holder = Persistence.currentHolder()
+        boolean dados = holder != null && Persistence.available
+        // a sessão Hibernate fixa o tenant na abertura: a da requisição abre aqui, antes do bloco, com o tenant
+        // normal dela (abrir dentro do bloco a prenderia ao tenant forçado). Com o mesmo tenant, o bloco a usa, e as
+        // entidades continuam ligadas a ela (lazy na view, dirty checking); com outro, usa uma sessão própria
+        if (dados) holder.session
         org.grox.core.Scoped.where(CURRENT, tenant, { ->
-            def holder = Persistence.currentHolder()
-            // a sessão Hibernate fixa o tenant na abertura: se for outro (ou ainda não foi aberta,
-            // o que a prenderia a este tenant), usa uma sessão própria para o bloco
-            if (holder != null && Persistence.available && (!holder.opened || !TenantSupport.sessionMatches(holder.session, tenant))) {
+            if (dados && !TenantSupport.sessionMatches(holder.session, tenant)) {
                 return Persistence.withNewSession { invokeBody(body, tenant) }
             }
             invokeBody(body, tenant)

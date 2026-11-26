@@ -32,8 +32,8 @@ class QueryRunner {
         if (p?.offset) offset = p.offset as int
         if (p?.sort) {
             String sort = p.sort.toString()
-            // só propriedades conhecidas (params.sort pode vir do usuário)
-            if (api.domain.hasPersistentProperty(sort.tokenize('.')[0])) orders = [[sort, p.order?.toString() == 'desc' ? 'desc' : 'asc']]
+            // só caminhos conhecidos, inteiros (params.sort vem do usuário): o inválido é ignorado, como no list(params)
+            if (QueryContext.isValidPath(api.domain, sort)) orders = [[sort, p.order?.toString() == 'desc' ? 'desc' : 'asc']]
         }
         this
     }
@@ -139,7 +139,7 @@ class QueryRunner {
     }
 
     private List<Order> ordering(QueryContext qc) {
-        orders.collect { List<String> o -> o[1] == 'desc' ? qc.cb.desc(qc.path(o[0])) : qc.cb.asc(qc.path(o[0])) }
+        orders.collect { List<String> o -> o[1] == 'desc' ? qc.cb.desc(qc.orderPath(o[0])) : qc.cb.asc(qc.orderPath(o[0])) }
     }
 
     /** Sem ordenação explícita, usa o {@code sort} do mapping. */
@@ -147,9 +147,9 @@ class QueryRunner {
         Object configured = api.domain.mapping.settings.sort
         if (configured instanceof Map && configured) {
             Map.Entry e = ((Map) configured).entrySet().first()
-            q.orderBy(e.value?.toString() == 'desc' ? qc.cb.desc(qc.path(e.key.toString())) : qc.cb.asc(qc.path(e.key.toString())))
+            q.orderBy(e.value?.toString() == 'desc' ? qc.cb.desc(qc.orderPath(e.key.toString())) : qc.cb.asc(qc.orderPath(e.key.toString())))
         } else if (configured) {
-            q.orderBy(qc.cb.asc(qc.path(configured.toString())))
+            q.orderBy(qc.cb.asc(qc.orderPath(configured.toString())))
         }
     }
 

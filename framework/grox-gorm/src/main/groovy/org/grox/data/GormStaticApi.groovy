@@ -201,7 +201,11 @@ class GormStaticApi {
             guard(Persistence.currentSession())
             def q = Persistence.currentSession().createMutationQuery(ordinals(hql))
             bindParams(q, params)
-            q.executeUpdate()
+            try {
+                q.executeUpdate()
+            } catch (RuntimeException e) {
+                throw Persistence.translate(e)
+            }
         }
     }
 

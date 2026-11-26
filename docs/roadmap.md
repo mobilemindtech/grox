@@ -158,16 +158,16 @@ Revisão do framework inteiro (a modularização moveu todos os fontes desde a d
 - [x] Rotas da DSL carregam a sessão (Redis) no event loop, ao montar o `RouteContext`
 - [x] `<g:datePicker>` com valor inválido: 500 em vez de `typeMismatch`
 
-**Prioridade 3 (correção, comparado ao Grails):**
-- [ ] Exceção numa transação participante não marca rollback-only: commit parcial silencioso
-- [ ] `Tenants.withId`/`@CurrentTenant` antes da primeira consulta da requisição: entidades destacadas (lazy falha na view)
-- [ ] Binding de `hasMany` por ids: `String` no `Set` da associação, e o `save` quebra
-- [ ] `sort` por caminho de associação: inner join (somem linhas, `totalCount` diverge); sort inválido dá 500
-- [ ] Violação de constraint no `persist` ou no commit não vira `DataIntegrityViolationException`
-- [ ] `${x.encodeAsHTML()}` e os outros `encodeAs*` escapados de novo pelo `${}`
-- [ ] `afterView` dos interceptors não roda quando a action ou a view lança exceção
-- [ ] Pug: `#{tag(...)}` escapa de novo o `SafeHtml` das tags
-- [ ] `@ReadOnly` faz flush das alterações (FlushMode MANUAL)
+**Prioridade 3 (correção, comparado ao Grails, feito):**
+- [x] Exceção numa transação participante não marca rollback-only: commit parcial silencioso
+- [x] `Tenants.withId`/`@CurrentTenant` antes da primeira consulta da requisição: entidades destacadas (lazy falha na view)
+- [x] Binding de `hasMany` por ids: `String` no `Set` da associação, e o `save` quebra
+- [x] `sort` por caminho de associação: inner join (somem linhas, `totalCount` diverge); sort inválido dá 500
+- [x] Violação de constraint no `persist` ou no commit não vira `DataIntegrityViolationException`
+- [x] `${x.encodeAsHTML()}` e os outros `encodeAs*` escapados de novo pelo `${}`
+- [x] `afterView` dos interceptors não roda quando a action ou a view lança exceção
+- [x] Pug: `#{tag(...)}` escapa de novo o `SafeHtml` das tags
+- [x] `@ReadOnly` faz flush das alterações (FlushMode MANUAL)
 
 **Prioridade 4 (desempenho e manutenção):**
 - [ ] Recarga: pools do Redis e conexões do RabbitMQ das gerações antigas não são fechados; `Logs.CACHE` e `ScaffoldViews.DOMAINS` retêm os classloaders
@@ -260,4 +260,3 @@ Iniciada em 2026-10-10 em `docs/livro/` (`docs/livro/build.sh` gera e confere li
 - Basic auth faz bcrypt a cada requisição (custo 10, ~50 a 100 ms). Para APIs de alto volume, prefira JWT.
 - O GORM é global na JVM (`Gorm`/`Persistence` estáticos): só uma aplicação por processo.
 - O `validate()` de um argumento domain de action também roda em ações de leitura (`show`), o que custa uma consulta de `unique`.
-- `readOnly` em `@Transactional` não coloca a sessão em modo somente leitura.

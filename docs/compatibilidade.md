@@ -72,7 +72,7 @@ Legenda: ✅ suportado · 🟡 parcial · ❌ ausente (ver [roadmap](roadmap.md)
 |---|---|---|
 | Singleton com injeção por nome (`def x` / tipado) | ✅ | |
 | `static actor = true` (extensão Grox) | ✅ | |
-| `@Transactional`, `@ReadOnly` (`grails.gorm.transactions`) | ✅ | Por proxy (chamadas externas). `static transactional` ❌. `readOnly` não muda o comportamento da sessão |
+| `@Transactional`, `@ReadOnly` (`grails.gorm.transactions`) | ✅ | Por proxy (chamadas externas). `static transactional` ❌. `readOnly`: `FlushMode.MANUAL` e entidades somente leitura. Participante que falha marca a transação inteira (`UnexpectedRollbackException`), como no Spring |
 | Escopos (`static scope`) | ❌ | |
 
 ## Views, GSP e TagLibs
@@ -87,7 +87,7 @@ Legenda: ✅ suportado · 🟡 parcial · ❌ ausente (ver [roadmap](roadmap.md)
 | `g:hasErrors`, `g:eachError`, `g:renderErrors`, `g:fieldValue`, `g:message error=` | ✅ | |
 | TagLibs da aplicação, `namespace`, `returnObjectForTags`, `body(args)`; tags como closure ou como método (`def tag(Map attrs, Closure body)`, Grails 3+); namespace como propriedade no controller e na TagLib (`auth.isAdmin()`) | ✅ | `defaultEncodeAs`, `encodeAsForTags` ❌ |
 | Layouts SiteMesh (meta, convenção, `pageProperty`, `<content tag>`, `applyLayout`) | ✅ | SiteMesh 3 em vez do 2 do Grails. `<sitemesh:write>` também funciona |
-| Codecs `encodeAsHTML/URL/JSON/JavaScript/Raw`, `encodeAsMD5/SHA1/SHA256` (e `...Bytes`), `encodeAsBase64/Hex` | ✅ | Configuração de codec padrão ❌ |
+| Codecs `encodeAsHTML/URL/JSON/JavaScript/Raw`, `encodeAsMD5/SHA1/SHA256` (e `...Bytes`), `encodeAsBase64/Hex` | ✅ | Configuração de codec padrão ❌. Como no Grails, o que `encodeAsHTML/JavaScript/URL` devolveu não é codificado de novo pelo `${}` nem pelas tags (registro por requisição) |
 | Asset pipeline: `grails-app/assets`, `require`/`require_tree`/`require_self`, `url()` no CSS, digest e manifest no build, tags `asset:javascript/stylesheet/image/link/assetPath/assetPathExists` | ✅ | Implementação própria: o asset-pipeline-core 5.0.9 não roda no Groovy 6 e a 5.2.0-RC exige o GraalVM. Sem Babel/ES6, SASS, LESS, minificação, gzip nem modo "bundle=false" |
 | Pré-compilação das GSPs no build | ✅ | Plugin `org.grox.app` (`compileGsp`). Em desenvolvimento, compilação sob demanda com reload |
 | Recarga de controllers, services e domain classes no `run` | ✅ | Com classloaders por geração, sem spring-loaded nem devtools. Recarga leve para artefatos e completa para domain e `src/` (ver guia). Também acompanha as bibliotecas `org.grox.lib` do mesmo build (no Grails, plugins locais com `grails { plugins { implementation project(...) } }`) |

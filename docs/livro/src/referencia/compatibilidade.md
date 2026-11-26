@@ -111,7 +111,7 @@ Legenda: ✅ suportado · 🟡 parcial · ❌ ausente (veja o `docs/roadmap.md` 
 |---|---|---|
 | Singleton com injeção por nome (`def x` / tipado) | ✅ | |
 | `static actor = true` | ✅ | Extensão Grox |
-| `@Transactional`, `@ReadOnly` (`grails.gorm.transactions`) | ✅ | Por proxy (chamadas externas). `static transactional` ❌. `readOnly` não muda o comportamento da sessão |
+| `@Transactional`, `@ReadOnly` (`grails.gorm.transactions`) | ✅ | Por proxy (chamadas externas). `static transactional` ❌. `readOnly`: `FlushMode.MANUAL` e entidades somente leitura. Participante que falha marca a transação inteira (`UnexpectedRollbackException`), como no Spring |
 | Métodos sem `@Transactional` em service com outros métodos transacionais | ✅ | Rodam na instância real, com as dependências injetadas |
 | Escopos (`static scope`) | ❌ | |
 

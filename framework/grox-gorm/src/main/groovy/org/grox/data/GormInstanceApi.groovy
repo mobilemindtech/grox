@@ -64,13 +64,17 @@ class GormInstanceApi {
             }
             Object stored = entity
             if (!managed) {
-                if (isNew) {
-                    s.persist(entity)
-                } else {
-                    Object merged = s.merge(entity)
-                    stored = merged
-                    if (!d.composite) d.identity.set(entity, d.identity.get(merged))
-                    if (d.version) d.version.set(entity, d.version.get(merged))
+                try {
+                    if (isNew) {
+                        s.persist(entity)   // com id IDENTITY, o INSERT já sai aqui
+                    } else {
+                        Object merged = s.merge(entity)
+                        stored = merged
+                        if (!d.composite) d.identity.set(entity, d.identity.get(merged))
+                        if (d.version) d.version.set(entity, d.version.get(merged))
+                    }
+                } catch (RuntimeException e) {
+                    throw Persistence.translate(e)
                 }
             }
             if (d.tenantHasOne) HasOneCascade.afterSave(s, d, entity, stored)
@@ -84,8 +88,8 @@ class GormInstanceApi {
     static void flush(Session s) {
         try {
             s.flush()
-        } catch (org.hibernate.exception.ConstraintViolationException e) {
-            throw new DataIntegrityViolationException(e.message, e)
+        } catch (RuntimeException e) {
+            throw Persistence.translate(e)
         }
     }
 
@@ -95,7 +99,11 @@ class GormInstanceApi {
             if (Gorm.domain(entity.getClass()).multiTenant) TenantSupport.requireTenant(s)
             event(entity, 'beforeDelete')
             if (!GormEvents.fire(new PreDeleteEvent(entity))) return
-            s.remove(s.contains(entity) ? entity : s.merge(entity))
+            try {
+                s.remove(s.contains(entity) ? entity : s.merge(entity))
+            } catch (RuntimeException e) {
+                throw Persistence.translate(e)
+            }
             if (opts?.flush) flush(s)
             GormEvents.fire(new PostDeleteEvent(entity))
         }

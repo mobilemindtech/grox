@@ -53,7 +53,7 @@ As expressões são **Groovy**, como na GSP (o pug4j usa JEXL por padrão; o Gro
 | `- var total = livros*.preco.sum()` | Variável no escopo atual |
 | `if livros` / `unless`, `each l in livros`, `each v, k in mapa`, `while` | Verdade do Groovy (lista vazia, `0`, `''` e `null` são falsos) |
 | `a(href=g.createLink(action: 'show', id: l.id))` | Atributo com expressão |
-| `p #{message(code: 'livro.label')}` | Tags do `g:` como método, como na GSP |
+| `p #{message(code: 'livro.label')}` | Tags do `g:` como método, como na GSP: a saída da tag já vem escapada e não é escapada de novo |
 
 - Uma variável que não existe é `null` (sem exceção), e `?.`, `?:`, closures (`livros.findAll { it.ano > 1900 }`), GStrings e listas e mapas do Groovy (`[a: 1]`) funcionam.
 - Visíveis em toda view: o modelo, `params`, `session`, `flash`, `request`, `response`, `controllerName`, `actionName`, `locale` e os namespaces de tags (`g`, `fmt`...).

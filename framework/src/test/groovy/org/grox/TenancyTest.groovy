@@ -150,4 +150,32 @@ class TenancyTest {
             }
         }
     }
+
+    @Test
+    void 'withCurrent antes da primeira consulta da requisicao usa a sessao dela'() {
+        System.setProperty(SystemPropertyTenantResolver.PROPERTY, 'acme')
+        try {
+            Ficha.withTransaction {
+                def f = new Ficha(nome: 'f-lazy')
+                f.anamnese = new FichaAnamnese(observacao: 'ok', ficha: f)
+                f.save(failOnError: true)
+            }
+            // "requisição": sessão preguiçosa, e um service @CurrentTenant faz a primeira consulta
+            Persistence.withSessionIfAvailable {
+                def a = Tenants.withCurrent { FichaAnamnese.findByObservacao('ok') }
+                assert a.attached                 // antes: destacada (sessão própria, já fechada)
+                assert a.ficha.nome == 'f-lazy'   // antes: LazyInitializationException na view
+            }
+            // tenant diferente do da requisição continua numa sessão própria
+            Persistence.withSessionIfAvailable {
+                FichaAnamnese.count()
+                assert Tenants.withId('globex') { FichaAnamnese.count() } == 0
+                assert FichaAnamnese.findByObservacao('ok')   // a sessão da requisição segue no tenant dela
+            }
+        } finally {
+            // o banco é compartilhado pelos testes da classe
+            Ficha.withTransaction { Ficha.findByNome('f-lazy')?.delete(flush: true) }
+            System.clearProperty(SystemPropertyTenantResolver.PROPERTY)
+        }
+    }
 }

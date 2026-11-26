@@ -40,7 +40,12 @@ class GroxTransactionManager implements PlatformTransactionManager {
         if (status.newTransaction) {
             try {
                 def tx = status.holder.session.transaction
-                if (status.rollbackOnly) tx.rollback() else tx.commit()
+                if (status.rollbackOnly) {
+                    tx.rollback()
+                    if (status.globalRollbackOnly) throw new org.springframework.transaction.UnexpectedRollbackException(TransactionStatus.UNEXPECTED_ROLLBACK)
+                } else {
+                    Persistence.commit(tx)
+                }
             } finally {
                 status.holder.status = null
             }
@@ -59,7 +64,7 @@ class GroxTransactionManager implements PlatformTransactionManager {
                 status.holder.status = null
             }
         } else {
-            status.setRollbackOnly()
+            status.markGlobalRollback()
         }
         status.completed = true
     }

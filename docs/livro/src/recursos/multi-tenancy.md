@@ -96,7 +96,7 @@ import grails.gorm.multitenancy.Tenants
 
 Tenants.currentId()                       // tenant atual (TenantNotFoundException se não houver)
 Tenants.currentIdOrNull()
-Tenants.withId('acme') { Tarefa.list() }  // executa com outro tenant (abre nova sessão se preciso)
+Tenants.withId('acme') { Tarefa.list() }  // executa com outro tenant (abre nova sessão se for outro tenant)
 Tarefa.withTenant('acme') { ... }
 Tenants.withCurrent { ... }               // com o tenant resolvido
 Tenants.withoutId { Tarefa.list() }       // sem filtro: todos os tenants

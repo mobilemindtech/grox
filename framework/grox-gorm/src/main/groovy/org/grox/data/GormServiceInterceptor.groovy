@@ -28,20 +28,22 @@ class GormServiceInterceptor implements ServiceInterceptor {
     @Override
     Map<String, Closure> interceptors(Class<?> type, Object target, Set<String> methods) {
         Map<String, Propagation> transactional = transactionalMethods(type, methods)
+        Set<String> readOnly = readOnlyMethods(type, methods)
         Map<String, Object> tenancy = tenantModes(type, methods)
         Map<String, Closure> result = [:]
         (transactional.keySet() + tenancy.keySet()).each { String name ->
             Propagation propagation = transactional[name]
             Object mode = tenancy[name]
             result[name] = { Closure call ->
-                Closure body = propagation == null ? call : { -> transaction(type, name, propagation, call) }
+                boolean ro = name in readOnly
+                Closure body = propagation == null ? call : { -> transaction(type, name, propagation, ro, call) }
                 mode == null ? body.call() : withTenant(mode, target, body)
             }
         }
         result
     }
 
-    private static Object transaction(Class<?> type, String name, Propagation propagation, Closure body) {
+    private static Object transaction(Class<?> type, String name, Propagation propagation, boolean readOnly, Closure body) {
         if (!Persistence.available) return body.call()
         switch (propagation) {
             case Propagation.REQUIRES_NEW: return Persistence.withNewTransaction(body)
@@ -53,7 +55,28 @@ class GormServiceInterceptor implements ServiceInterceptor {
                     throw new org.springframework.transaction.TransactionException("${type.simpleName}.${name}: propagação MANDATORY sem transação em andamento")
                 }
                 return body.call()
-            default: return Persistence.withTransaction(body)
+            default: return readOnly ? readOnlyTransaction(body) : Persistence.withTransaction(body)
+        }
+    }
+
+    /**
+     * {@code @ReadOnly} / {@code readOnly = true}, como o {@code HibernateTransactionManager}: a transação nova roda com
+     * a sessão em {@code FlushMode.MANUAL} e as entidades carregadas como somente leitura, restaurados depois do
+     * commit (alterações feitas nelas não vão ao banco). Participando de uma transação já aberta, vale o modo dela.
+     */
+    private static Object readOnlyTransaction(Closure body) {
+        Persistence.withSession { org.hibernate.Session s ->
+            if (s.transaction.active) return Persistence.withTransaction(body)
+            org.hibernate.FlushMode mode = s.hibernateFlushMode
+            boolean defaultReadOnly = s.defaultReadOnly
+            s.hibernateFlushMode = org.hibernate.FlushMode.MANUAL
+            s.defaultReadOnly = true
+            try {
+                return Persistence.withTransaction(body)
+            } finally {
+                s.hibernateFlushMode = mode
+                s.defaultReadOnly = defaultReadOnly
+            }
         }
     }
 
@@ -78,6 +101,23 @@ class GormServiceInterceptor implements ServiceInterceptor {
             if (p != null) result[n] = p
         }
         result
+    }
+
+    /** Métodos com {@code @ReadOnly} ou {@code readOnly = true} (do método, senão da classe). */
+    static Set<String> readOnlyMethods(Class<?> type, Set<String> methods) {
+        Boolean classLevel = readOnlyOf(type)
+        Set<String> declared = type.declaredMethods.findAll { Method m -> Modifier.isPublic(m.modifiers) }*.name as Set
+        methods.findAll { String n ->
+            Method annotated = type.methods.find { it.name == n && propagationOf(it) != null }
+            annotated ? readOnlyOf(annotated) : (n in declared && classLevel)
+        } as Set<String>
+    }
+
+    private static Boolean readOnlyOf(java.lang.reflect.AnnotatedElement e) {
+        if (e.isAnnotationPresent(ReadOnly)) return true
+        Transactional gorm = e.getAnnotation(Transactional)
+        if (gorm) return gorm.readOnly()
+        e.getAnnotation(org.springframework.transaction.annotation.Transactional)?.readOnly() ?: false
     }
 
     /** {@code @Transactional}/{@code @ReadOnly} do GORM ou {@code @Transactional} do Spring. */

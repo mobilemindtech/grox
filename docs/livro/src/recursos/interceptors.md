@@ -50,7 +50,7 @@ class AuditoriaInterceptor {
 2. A action roda.
 3. **`after()`**: depois da action e **antes** da view. `model` e `view` podem ser alterados; `false` impede a renderização.
 4. A view é renderizada (com layout).
-5. **`afterView()`**: depois da renderização. `throwable` traz a exceção da requisição, se houver.
+5. **`afterView()`**: depois da renderização. Roda **sempre** para os interceptors cujo `before()` passou, também quando a action ou a view lança exceção (como o `afterCompletion` do Spring), e é o lugar para limpar o que o `before()` abriu. `throwable` traz a exceção da requisição, se houver. Uma exceção no `afterView` vai para o log e não esconde a original.
 
 Isso funciona porque, dentro de uma action, `render(view:)`, `respond` (HTML) e a view padrão são **adiados** até depois dos `after()`. Templates e `render text:` saem na hora.
 

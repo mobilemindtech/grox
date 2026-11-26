@@ -113,6 +113,24 @@ class GspTest {
     }
 
     @Test
+    void 'encodeAsHTML e encodeAsJavaScript nao sao codificados de novo pelo ${} nem pelas tags'() {
+        def req = new org.grox.http.GroxRequest(method: 'GET', path: '/', uri: '/')
+        def scope = [getRequest: { req }, getResponse: { null }, getLocale: { Locale.ROOT }, getSession: { boolean b -> null }] as org.grox.http.RequestScope
+        org.grox.http.CurrentRequest.with(scope) {
+            // antes: &amp;lt;b&amp;gt;&amp;amp; (escapado duas vezes)
+            assert render('/enc1', '${x.encodeAsHTML()}|${x}', [x: '<b>&']) == '&lt;b&gt;&amp;|&lt;b&gt;&amp;'
+            // as tags escapam atributos com o Html.escape, que também reconhece o que já foi codificado
+            assert org.grox.http.Html.escape('a&b'.encodeAsHTML()) == 'a&amp;b' && org.grox.http.Html.escape('a&b') == 'a&amp;b'
+            // JavaScript: sem aspas nem < > & crus, então vai como está até dentro de atributo
+            String js = render('/enc3', "<a onclick=\"f('\${x.encodeAsJavaScript()}')\">", [x: 'D\'Agua "&" </script>'])
+            assert js == "<a onclick=\"f('D\\u0027Agua \\u0022\\u0026\\u0022 \\u003C/script\\u003E')\">"
+            assert render('/enc4', '${x.encodeAsURL()}', [x: 'a b&c']) == 'a+b%26c'
+        }
+        // fora de uma requisição, nada é registrado: o ${} codifica normalmente
+        assert render('/enc1', null, [x: '<b>']) == '&amp;lt;b&amp;gt;|&lt;b&gt;'
+    }
+
+    @Test
     void 'tags como metodos: corpo, sobrecarga, returnObject, mistura com closure, heranca e excecao'() {
         assert render('/m1', '<m:caixa cls="a">oi ${n}</m:caixa>', [n: 1]) == '<p class="a">oi 1</p>'
         assert render('/m2', '<m:item>x</m:item>|${m.dobro(n: 4) + 1}|<m:dobro n="5"/>') == '<li>x</li>|9|10'

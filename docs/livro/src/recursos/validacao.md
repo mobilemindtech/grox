@@ -119,6 +119,7 @@ def save(Usuario usuario) { ... }        // argumento da action
 
 Regras:
 
+- **`hasMany` por ids:** `<g:select multiple name="livros">` (lista de ids) ou `"livros": [{"id": 1}]` no JSON carregam as entidades e atualizam a coleção existente com `addTo`/`removeFrom` (o `belongsTo` do outro lado também), como o `GrailsWebDataBinder`. Ids inexistentes ou inválidos são ignorados.
 - **Nunca vinculados:** `id`, `version`, `dateCreated`, `lastUpdated` e a propriedade de tenant (também fora do JSON das entidades).
 - **`bindable: false`** tira a propriedade do binding, em domain classes e command objects. Um `include` explícito ainda a vincula. Use em campos que o usuário não escolhe, como tenant, papéis e flags de conta em telas de autoedição:
 

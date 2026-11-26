@@ -28,6 +28,7 @@ abstract class GspPage extends Script {
 
     @CompileStatic
     void printEncoded(Object value) {
+        // o Html.escape não codifica de novo o que um encodeAs* devolveu nesta requisição (como no Grails)
         if (value != null) rc.out.write(Html.escape(value))
     }
 

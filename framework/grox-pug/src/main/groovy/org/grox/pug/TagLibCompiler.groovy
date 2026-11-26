@@ -8,6 +8,7 @@ import de.neuland.pug4j.exceptions.ExpressionException
 import de.neuland.pug4j.exceptions.PugCompilerException
 import de.neuland.pug4j.model.PugModel
 import de.neuland.pug4j.parser.node.Attr
+import de.neuland.pug4j.parser.node.ExpressionNode
 import de.neuland.pug4j.parser.node.ExpressionString
 import de.neuland.pug4j.parser.node.Node
 import de.neuland.pug4j.parser.node.TagNode
@@ -38,6 +39,38 @@ class TagLibCompiler extends Compiler {
         super(template, context, engine)
         this.engine = engine
         this.rc = rc
+    }
+
+    /**
+     * {@code #{x}} e {@code p= x} escapam o valor, mas uma tag chamada como método ({@code message(...)},
+     * {@code g.link(...)}) já devolve {@link SafeHtml} escapado: vai como está, como na GSP. O valor é avaliado uma
+     * vez só; nos outros casos ele é entregue ao pug4j, que segue com o escape dele.
+     */
+    @Override
+    void visit(ExpressionNode node, IndentWriter writer, PugModel model) {
+        def handler = engine.expressionHandler
+        if (!node.buffer || !node.escape || node.hasBlock() || !(handler instanceof GroovyExpressionHandler)) {
+            super.visit(node, writer, model)
+            return
+        }
+        Object value
+        try {
+            value = handler.evaluateExpression(node.value, model)
+        } catch (ExpressionException ignored) {
+            super.visit(node, writer, model)   // o pug4j reporta o erro com a linha do template
+            return
+        }
+        if (value instanceof SafeHtml) {
+            writer.append(value.toString())
+            return
+        }
+        GroovyExpressionHandler groovy = (GroovyExpressionHandler) handler
+        groovy.preset(node.value, value)
+        try {
+            super.visit(node, writer, model)
+        } finally {
+            groovy.clearPreset()
+        }
     }
 
     @Override

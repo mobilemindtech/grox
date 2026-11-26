@@ -21,6 +21,16 @@ class GroovyExpressionHandler extends AbstractExpressionHandler {
     private final GroovyClassLoader loader
     private final Map<String, Class<? extends Script>> scripts = new ConcurrentHashMap<>()
     private volatile boolean cache = true
+    /** Valor já avaliado de uma expressão, entregue uma vez ao pug4j (o {@link TagLibCompiler} avalia antes dele). */
+    private final ThreadLocal<Object[]> preset = new ThreadLocal<>()
+
+    void preset(String expression, Object value) {
+        preset.set([expression, value] as Object[])
+    }
+
+    void clearPreset() {
+        preset.remove()
+    }
 
     GroovyExpressionHandler(ClassLoader parent) {
         def config = new CompilerConfiguration()
@@ -30,6 +40,11 @@ class GroovyExpressionHandler extends AbstractExpressionHandler {
 
     @Override
     Object evaluateExpression(String expression, PugModel model) throws ExpressionException {
+        Object[] p = preset.get()
+        if (p != null && p[0] == expression) {
+            preset.remove()
+            return p[1]
+        }
         saveLocalVariableName(expression, model)
         try {
             Script script = InvokerHelper.createScript(compile(expression), new PugBinding(model))

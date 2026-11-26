@@ -97,6 +97,20 @@ t:upper(texto='<i>')''')
     }
 
     @Test
+    void 'pug: tag como metodo dentro de #{} e p= nao e escapada de novo, e a expressao roda uma vez'() {
+        write('pg/safe.pug', '''\
+p #{t.upper(texto: "d'agua & <i>")}
+p= t.upper(texto: '<b>')
+p #{'<x>'}
+p #{contador << 1; contador.size()}''')
+        def contador = []
+        String html = render('/pg/safe', [contador: contador])
+        // a saída da tag vai como está, como no ${} da GSP (antes: escapada de novo pelo pug4j)
+        assert html == "<p>D'AGUA & <I></p><p><B></p><p>&lt;x&gt;</p><p>1</p>"
+        assert contador.size() == 1
+    }
+
+    @Test
     void 'pug: extends, include, mixin e filtro markdown com HTML escapado'() {
         write('layouts/base.pug', 'html\n  body\n    block conteudo\n')
         write('pg/_menu.pug', 'nav menu\n')

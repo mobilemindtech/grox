@@ -2,7 +2,9 @@ package org.grox.data.binding
 
 import org.grox.core.ClassUtils
 import org.grox.core.Conversions
+import org.grox.data.DomainProperty
 import org.grox.data.Gorm
+import org.codehaus.groovy.runtime.InvokerHelper
 import org.springframework.web.multipart.MultipartFile
 import org.grox.data.validation.FieldError
 import org.grox.data.validation.ConstraintsBuilder
@@ -51,6 +53,25 @@ class DataBinder {
         if (id instanceof Collection) id = ((Collection) id) ? ((Collection) id).iterator().next() : null
         if (id == null || id.toString().trim().isEmpty() || id.toString() == 'null') return null
         Gorm.api(type).get(id)
+    }
+
+    /**
+     * {@code hasMany} de domain classes por ids ({@code <g:select multiple>}, {@code [{"id": 1}]} no JSON), como o
+     * {@code GrailsWebDataBinder}: cada id vira a entidade, e a coleção existente é atualizada com
+     * {@code addTo}/{@code removeFrom} (o lado {@code belongsTo} também), sem trocar a coleção persistente.
+     */
+    private static void bindAssociations(Object target, String name, MetaProperty mp, Class<?> type, Object raw) {
+        Collection items = raw instanceof Collection ? (Collection) raw : raw == null || raw.toString().trim().isEmpty() ? [] : [raw]
+        List wanted = items.collect { resolveAssociation(type, it) }.findAll { it != null }.unique()
+        String suffix = name.capitalize()
+        Collection current = (Collection) mp.getProperty(target)
+        if (current != null) {
+            (new ArrayList(current) - wanted).each { InvokerHelper.invokeMethod(target, 'removeFrom' + suffix, it) }
+        }
+        wanted.each { Object item ->
+            if (current == null || !current.contains(item)) InvokerHelper.invokeMethod(target, 'addTo' + suffix, item)
+            current = (Collection) mp.getProperty(target)
+        }
     }
 
     static final List<String> DEFAULT_DATE_FORMATS = Conversions.DEFAULT_DATE_FORMATS
@@ -121,6 +142,13 @@ class DataBinder {
             if (Gorm.isDomain(t)) {
                 mp.setProperty(target, resolveAssociation(t, raw))
                 continue
+            }
+            if (entity && Collection.isAssignableFrom(t)) {
+                DomainProperty dp = Gorm.domain(ClassUtils.userClass(target.getClass())).persistentProperties[n]
+                if (dp != null && (dp.kind == DomainProperty.Kind.ONE_TO_MANY || dp.kind == DomainProperty.Kind.MANY_TO_MANY) && dp.referencedType != null) {
+                    bindAssociations(target, n, mp, dp.referencedType, raw)
+                    continue
+                }
             }
             if (t == String && raw instanceof CharSequence) {
                 // como no Grails: trim e string vazia vira null

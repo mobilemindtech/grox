@@ -2,6 +2,7 @@ package org.grox.data.query
 
 import jakarta.persistence.criteria.CriteriaBuilder
 import jakarta.persistence.criteria.From
+import jakarta.persistence.criteria.JoinType
 import jakarta.persistence.criteria.Path
 import jakarta.persistence.criteria.Root
 import org.grox.data.DomainClass
@@ -19,6 +20,8 @@ class QueryContext {
     final Root root
     final DomainClass domain
     private final Map<String, From> joins = [:]
+    /** Joins da ordenação: LEFT, para não esconder quem não tem a associação (separados dos das restrições). */
+    private final Map<String, From> orderJoins = [:]
 
     QueryContext(CriteriaBuilder cb, Root root, DomainClass domain) {
         this.cb = cb
@@ -27,6 +30,15 @@ class QueryContext {
     }
 
     Path path(String dotted) {
+        resolve(dotted, joins, JoinType.INNER)
+    }
+
+    /** Caminho para {@code order by}: joins LEFT (um livro sem autor continua na lista ordenada por {@code autor.nome}). */
+    Path orderPath(String dotted) {
+        resolve(dotted, orderJoins, JoinType.LEFT)
+    }
+
+    private Path resolve(String dotted, Map<String, From> cache, JoinType joinType) {
         List<String> parts = dotted.tokenize('.')
         From from = root
         DomainClass d = domain
@@ -37,7 +49,7 @@ class QueryContext {
             if (prop == null || !prop.association) throw new IllegalArgumentException("${d?.name}.${p} não é uma associação (caminho ${dotted})")
             prefix += (prefix ? '.' : '') + p
             From current = from
-            from = joins.computeIfAbsent(prefix) { current.join(p) }
+            from = cache.computeIfAbsent(prefix) { current.join(p, joinType) }
             d = Gorm.domain(prop.referencedType)
         }
         String last = parts.last()
@@ -57,6 +69,19 @@ class QueryContext {
     private static Object convertOne(DomainProperty p, Object v) {
         if (v instanceof CharSequence && p.type != String && DataBinder.isSimple(p.type)) return DataBinder.convert(v.toString(), p.type)
         v instanceof GString ? v.toString() : v   // o Hibernate 7 recusa GString (o GORM converte)
+    }
+
+    /** O caminho existe ({@code titulo}, {@code autor.nome}): para validar um {@code sort} vindo de {@code params}. */
+    static boolean isValidPath(DomainClass domain, String dotted) {
+        if (!dotted) return false
+        List<String> parts = dotted.tokenize('.')
+        DomainClass d = domain
+        for (int i = 0; i < parts.size() - 1; i++) {
+            DomainProperty prop = d?.getAt(parts[i])
+            if (prop == null || !prop.association || prop.referencedType == null) return false
+            d = Gorm.domain(prop.referencedType)
+        }
+        d != null && d.hasPersistentProperty(parts.last())
     }
 
     DomainProperty property(String dotted) {

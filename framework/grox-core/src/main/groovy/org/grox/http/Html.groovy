@@ -3,9 +3,39 @@ package org.grox.http
 @groovy.transform.CompileStatic
 class Html {
 
+    /** Atributo da requisição com as strings já codificadas pelos codecs (conjunto por identidade). */
+    static final String ENCODED_ATTR = 'grox.encodedStrings'
+
+    /**
+     * Registra uma string já codificada ({@code encodeAsHTML}, {@code encodeAsJavaScript}, {@code encodeAsURL}) na
+     * requisição atual, como o {@code EncodingStateRegistry} do Grails: o {@link #escape} a devolve como está. Fora
+     * de uma requisição, não faz nada. Só para saídas sem {@code < > " '} crus.
+     */
+    static String markEncoded(String value) {
+        if (!value) return value
+        GroxRequest req = CurrentRequest.orNull()?.request
+        if (req == null) return value
+        Set<String> encoded = (Set<String>) req.getAttribute(ENCODED_ATTR)
+        if (encoded == null) {
+            encoded = Collections.synchronizedSet(Collections.newSetFromMap(new IdentityHashMap<String, Boolean>()))
+            req.setAttribute(ENCODED_ATTR, encoded)
+        }
+        encoded.add(value)
+        value
+    }
+
+    /** A string veio de um codec nesta requisição. */
+    static boolean isEncoded(Object value) {
+        if (!(value instanceof String)) return false
+        RequestScope scope = CurrentRequest.orNull()
+        Set<String> encoded = scope?.request == null ? null : (Set<String>) scope.request.getAttribute(ENCODED_ATTR)
+        encoded != null && encoded.contains(value)
+    }
+
     static String escape(Object value) {
         if (value == null) return ''
         if (value instanceof SafeHtml) return value.toString()
+        if (isEncoded(value)) return (String) value
         String s = value.toString()
         StringBuilder sb = null
         for (int i = 0; i < s.length(); i++) {

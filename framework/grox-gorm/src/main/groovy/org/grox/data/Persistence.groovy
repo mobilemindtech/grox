@@ -111,18 +111,55 @@ class Persistence {
         org.grox.core.Scoped.where(CURRENT, holder, body)
     }
 
+    /**
+     * Como o Spring: violação de restrição no banco ({@code ConstraintViolationException} do Hibernate, também como
+     * causa) vira {@code DataIntegrityViolationException}, que o código Grails costuma capturar.
+     */
+    static RuntimeException translate(RuntimeException e) {
+        for (Throwable c = e; c != null; c = c.cause) {
+            if (c instanceof org.hibernate.exception.ConstraintViolationException) {
+                return new org.springframework.dao.DataIntegrityViolationException(c.message, e)
+            }
+            if (c.cause.is(c)) break
+        }
+        e
+    }
+
+    /** Commit com a tradução das violações de restrição (o flush do commit executa o SQL pendente). */
+    static void commit(Transaction tx) {
+        try {
+            tx.commit()
+        } catch (RuntimeException e) {
+            throw translate(e)
+        }
+    }
+
     /** Participa da transação corrente ou abre uma nova (commit no fim, rollback em exceção). */
     static <T> T withTransaction(Closure<T> body) {
         withSession { Session s ->
             SessionHolder holder = CURRENT.get()
             Transaction tx = s.transaction
-            if (tx.active) return callWith(body, new TransactionStatus(parent: holder.status ?: new TransactionStatus()))
+            if (tx.active) {
+                // participa: uma exceção marca a transação inteira (no Spring/Grails, a externa não faz commit parcial)
+                def inner = new TransactionStatus(parent: holder.status ?: (holder.status = new TransactionStatus()))
+                try {
+                    return callWith(body, inner)
+                } catch (Throwable t) {
+                    inner.markGlobalRollback()
+                    throw t
+                }
+            }
             def status = new TransactionStatus(newTransaction: true)
             holder.status = status
             tx.begin()
             try {
                 T result = callWith(body, status)
-                if (status.rollbackOnly) tx.rollback() else tx.commit()
+                if (status.rollbackOnly) {
+                    tx.rollback()
+                    if (status.globalRollbackOnly) throw new org.springframework.transaction.UnexpectedRollbackException(TransactionStatus.UNEXPECTED_ROLLBACK)
+                } else {
+                    commit(tx)
+                }
                 return result
             } catch (Throwable t) {
                 if (tx.active) tx.rollback()

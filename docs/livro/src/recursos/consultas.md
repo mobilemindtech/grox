@@ -16,6 +16,7 @@ Este capítulo mostra todas as formas de ler dados: os métodos estáticos, os d
 | `first()`, `last()`, `first(sort: 'nome')`, `last(Map)` | Primeira ou última pelo id (ou pelo `sort`) |
 
 - `sort` só aceita propriedades persistentes. Ordenar por uma coleção `hasMany` falha, como no Hibernate.
+- `sort` por caminho de associação (`sort: 'autor.nome'`) usa **left join**: quem não tem a associação continua na lista (e no `totalCount`). Num `where`/criteria com `params`, um caminho inexistente é ignorado, como no `list(params)`.
 - `offset` negativo é tratado como 0, como no GORM.
 
 ### `PagedResultList`

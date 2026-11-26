@@ -50,6 +50,7 @@ Atributos com literal de lista ou mapa são avaliados: `noSelection="['':'-']"`,
 `${expr}` e `<%= %>` são codificados em HTML. **Não** passam pela codificação:
 
 - valores `SafeHtml`: o `raw(x)`, a saída de tags e `encodeAsRaw()`;
+- o que `encodeAsHTML()`, `encodeAsJavaScript()` e `encodeAsURL()` devolveram na mesma requisição, como no Grails: `${x.encodeAsHTML()}` sai escapado uma vez só;
 - o texto literal da página.
 
 Métodos de `String` funcionam sobre valores `raw()`/codificados. A saída das suas TagLibs **não** é codificada automaticamente: codifique os valores na tag (veja [TagLibs](taglibs.md)).
@@ -109,7 +110,7 @@ Disponíveis em qualquer objeto, nas views e no código:
 | `encodeAsHTML()` | Escape HTML |
 | `encodeAsURL()` | Codificação de URL |
 | `encodeAsJSON()` | JSON |
-| `encodeAsJavaScript()` | Escape para string JavaScript |
+| `encodeAsJavaScript()` | Escape para string JavaScript (aspas, `&`, `<` e `>` como `\u0022`...: seguro também dentro de atributo HTML) |
 | `encodeAsRaw()` | Marca como seguro (sem escape) |
 | `encodeAsMD5()`, `encodeAsSHA1()`, `encodeAsSHA256()` | Digest em hex; `...Bytes()` devolve `byte[]` |
 | `encodeAsBase64()`, `encodeAsHex()` | Codificação |
