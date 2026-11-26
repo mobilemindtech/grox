@@ -7,7 +7,11 @@ import java.nio.file.Path
 import java.nio.file.Paths
 import java.util.jar.JarFile
 
-/** Lista as classes (não internas) de um pacote e subpacotes, em diretórios ou jars. */
+/**
+ * Lista as classes (não internas) de um pacote e subpacotes, em diretórios ou jars, em ordem alfabética:
+ * a ordem do sistema de arquivos varia entre máquinas, e dela dependeria o desempate de artefatos
+ * (por exemplo, interceptors com a mesma {@code order}).
+ */
 @CompileStatic
 class ClassScanner {
 
@@ -21,7 +25,7 @@ class ClassScanner {
                 scanJar(url, path, names)
             }
         }
-        names.findAll { !it.contains('$') }.toList()
+        names.findAll { !it.contains('$') }.toList().sort()
     }
 
     private static void scanDirectory(Path base, String pkg, Set<String> names) {

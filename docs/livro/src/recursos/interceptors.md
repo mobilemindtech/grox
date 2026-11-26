@@ -58,7 +58,7 @@ No `after()`, também existe `modelAndView`: `modelAndView.model` e `modelAndVie
 
 ## Ordem
 
-`order` define a precedência: o menor valor roda primeiro no `before()` e por último no `after()`/`afterView()`. As constantes `HIGHEST_PRECEDENCE` e `LOWEST_PRECEDENCE` estão disponíveis.
+`order` define a precedência: o menor valor roda primeiro no `before()` e por último no `after()`/`afterView()`. As constantes `HIGHEST_PRECEDENCE` e `LOWEST_PRECEDENCE` estão disponíveis. Com a mesma `order`, vale a ordem alfabética do nome completo da classe *(no Grails, a ordem nesse caso não é definida)*.
 
 ## API disponível
 

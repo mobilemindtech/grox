@@ -88,6 +88,6 @@ class RecursosTest {
         assert r.body() =~ /<p class="rodape-lista">\d\d:\d\d:\d\d<\/p>/
         assert admin.page('/').headers().firstValue('X-Tempo-Ms').present
         def interceptors = app.webContext.interceptors.interceptors
-        assert interceptors*.getClass()*.simpleName == ['AuditoriaInterceptor', 'UsuarioInterceptor', 'MavInterceptor']
+        assert interceptors*.getClass()*.simpleName == ['AuditoriaInterceptor', 'MavInterceptor', 'UsuarioInterceptor']   // mesma order: pelo nome
     }
 }

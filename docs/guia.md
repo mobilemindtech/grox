@@ -716,6 +716,7 @@ class AuditoriaInterceptor {
 - **Sem `match(...)`:** intercepta o controller de mesmo nome (`LivroInterceptor` → `livro`).
 - **API disponível:** `params`, `request`, `response`, `session`, `flash`, `controllerName`, `actionName`, `render`, `redirect`, `header`, `log`, e injeção de services.
 - **Execução:** os interceptors rodam depois da segurança e dentro do ator do controller.
+- **Empate de `order`:** vale a ordem alfabética do nome completo da classe (o `ClassScanner` lista os artefatos em ordem alfabética, igual em qualquer máquina).
 - **`modelAndView`:** no `after()`, `modelAndView.model` e `modelAndView.viewName` (null quando a action não tem view); `throwable` traz a exceção da requisição.
 - **Views adiadas:** dentro de uma action, `render(view:)`, `respond` (HTML) e a view padrão são **renderizados só depois dos `after()`**. Templates e `render text:` saem na hora.
 
