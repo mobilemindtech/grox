@@ -75,3 +75,8 @@ tasks.named('test') {
     // ArquiteturaTest: regrava a lista de violações conhecidas
     if (System.getProperty('arquitetura.atualizar')) systemProperty 'arquitetura.atualizar', 'true'
 }
+
+// os testes funcionais do plugin Gradle (build incluído em settings.gradle) também rodam no build
+tasks.named('check') {
+    dependsOn gradle.includedBuild('gradle-plugin').task(':test')
+}

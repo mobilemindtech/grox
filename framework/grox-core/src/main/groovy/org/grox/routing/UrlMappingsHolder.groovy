@@ -36,37 +36,47 @@ class UrlMappingsHolder {
         new UrlMappingsHolder(builder.mappings)
     }
 
+    /**
+     * O primeiro mapeamento que casa o caminho e leva a um destino (redirect, view ou controller e action existentes).
+     * Um mapeamento de outro verbo só conta para o 405 se levaria a um destino: {@code delete "/$controller/$id"}
+     * não faz um GET em {@code /nao-existe} (controller inexistente) dar 405 em vez de 404.
+     */
     RouteMatch match(String path, String method, Map<String, ? extends RouteTarget> controllers) {
         String verb = method == 'HEAD' ? 'GET' : method
         boolean methodMismatch = false
         for (UrlMapping m : mappings) {
             Map<String, String> vars = m.match(path)
             if (vars == null) continue
-            if (m.httpMethod && m.httpMethod != verb) {
+            boolean verbOk = !m.httpMethod || m.httpMethod == verb
+            RouteMatch found = resolve(m, vars, verb, controllers)
+            if (found == null) continue
+            if (!verbOk || found.methodNotAllowed) {
                 methodMismatch = true
                 continue
             }
-            if (m.attrs.redirect) return new RouteMatch(mapping: m, redirect: m.attrs.redirect.toString())
-            String controllerName = vars.controller ?: m.attrs.controller?.toString()
-            if (m.attrs.view && !controllerName) {
-                return new RouteMatch(mapping: m, view: m.attrs.view.toString(), params: paramsOf(m, vars))
-            }
-            RouteTarget artefact = controllers[controllerName]
-            if (artefact == null) continue
-            Object act = m.attrs.action
-            String actionName = vars.action
-            if (!actionName && act instanceof Map) {
-                actionName = ((Map) act)[verb]?.toString()
-                if (!actionName) {
-                    methodMismatch = true
-                    continue
-                }
-            }
-            actionName = actionName ?: act?.toString() ?: artefact.defaultAction
-            if (!actionName || !artefact.hasAction(actionName)) continue
-            return new RouteMatch(mapping: m, controller: artefact, actionName: actionName, params: paramsOf(m, vars))
+            return found
         }
         methodMismatch ? new RouteMatch(methodNotAllowed: true) : null
+    }
+
+    /** O destino do mapeamento, null se não há (controller ou action inexistente), ou um 405 (action só de outro verbo). */
+    private static RouteMatch resolve(UrlMapping m, Map<String, String> vars, String verb, Map<String, ? extends RouteTarget> controllers) {
+        if (m.attrs.redirect) return new RouteMatch(mapping: m, redirect: m.attrs.redirect.toString())
+        String controllerName = vars.controller ?: m.attrs.controller?.toString()
+        if (m.attrs.view && !controllerName) {
+            return new RouteMatch(mapping: m, view: m.attrs.view.toString(), params: paramsOf(m, vars))
+        }
+        RouteTarget artefact = controllers[controllerName]
+        if (artefact == null) return null
+        Object act = m.attrs.action
+        String actionName = vars.action
+        if (!actionName && act instanceof Map) {
+            actionName = ((Map) act)[verb]?.toString()
+            if (!actionName) return new RouteMatch(methodNotAllowed: true)
+        }
+        actionName = actionName ?: act?.toString() ?: artefact.defaultAction
+        if (!actionName || !artefact.hasAction(actionName)) return null
+        new RouteMatch(mapping: m, controller: artefact, actionName: actionName, params: paramsOf(m, vars))
     }
 
     private static Map<String, Object> paramsOf(UrlMapping m, Map<String, String> vars) {

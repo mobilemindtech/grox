@@ -15,10 +15,11 @@ Protótipo **Grox**: framework web leve sobre os atores do Groovy 6 (`groovy.con
 - `sample-plain/`: app sem `grails-app/` nem o módulo Grails (core + gorm + gsp + security + `grox-dsl`, views também em Pug e Markdown); garante o núcleo sem Grails
 - `sample-lib/`: biblioteca `org.grox.lib` (artefatos em outro pacote, no layout `grox-app/`) usada pelo `sample-app`
 - `gradle-plugin/`: plugins `org.grox.app` e `org.grox.lib` (build incluído); `bench/`: gerador de carga e a app de referência Grails x Grox (`bench/livros`, a mesma `grails-app/` no Grox e, em `bench/livros-grails`, no Grails 8; ver `docs/benchmark.md`)
-- `candidates/`: apps Grails importadas localmente para migração (não versionadas, ver `candidates/.gitignore`) e o `sanitize-yml.py`. **Nunca versione código ou credenciais dessas apps**
+- `candidates/`: só o `sanitize-yml.py`; o diretório ignora o resto (apps importadas localmente). O build de cada app da empresa sobre o Grox fica no repositório da app (`grox/`, build paralelo, `groxDir` apontando para este diretório)
 - Plugins do Grails reimplementados em `org.grox.plugins.*` (console, quartz, excel), só no que os projetos usam; a API pública mantém o pacote original
 
 ## Regras do projeto
+- **Repositório público** (https://github.com/mobilemindtech/grox): nada das apps da empresa entra aqui (nomes, classes, hosts, configuração, código). Nos textos, elas são "app A", "app B" e "app C"; o detalhe fica nos repositórios delas. O hook `.githooks/pre-commit` (`git config core.hooksPath .githooks`) barra os termos de `~/.config/grox/termos-privados.txt`, e o CI roda o `gitleaks`
 - Emular a API do Grails; **não usar jars do Grails ou GORM** (incompatíveis com o Groovy 6: falta `CallSite`)
 - Só versões estáveis das dependências (`gradle/libs.versions.toml`)
 - Estado de requisição, renderização, sessão de dados, autenticação e tenant em `ScopedValue` (`RequestContext`, `GspRenderContext`, `Persistence`, `SecurityContextHolder`, `Tenants`); os três últimos são propagados a services-ator por `ContextPropagation`. Nada bloqueante no event loop do Netty

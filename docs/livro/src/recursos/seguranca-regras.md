@@ -96,7 +96,9 @@ Uma expressão inválida **impede a aplicação de subir**, com a regra no erro.
 ## Padrões de caminho
 
 - Padrões Ant: `/admin/**` casa com `/admin` e tudo abaixo; `*` casa com um segmento; `?` com um caractere.
-- `httpMethod` restringe a regra a um método.
+- `httpMethod` restringe a regra a um método. No `@Secured` da action, nos outros métodos vale o `@Secured` do controller.
+- **`<g:actionSubmit>`:** o `_action_X` do formulário escolhe a action antes da segurança, e o `@Secured` avaliado é o da action que vai rodar. O `interceptUrlMap` continua casando pelo caminho da URL, como no plugin. No `@Secured` da action, nos outros métodos vale o `@Secured` do controller.
+- **`<g:actionSubmit>`:** o `_action_X` do formulário escolhe a action antes da segurança, e o `@Secured` avaliado é o da action que vai rodar. O `interceptUrlMap` continua casando pelo caminho da URL, como no plugin.
 - **Caminho canônico das actions** *(extensão Grox)*: `/admin.json` e `/admin/` roteiam como `/admin`. Numa action, vale a regra que vier primeiro entre a do caminho pedido e a do caminho sem formato e sem barra final. Assim `/admin.json` não escapa de `/admin/**` caindo no `/**` (no Grails, o `AntPathMatcher` deixa essa brecha), e uma regra explícita para `/x.json` continua valendo.
 - Caminhos com segmentos `.` ou `..` recebem **400**, para não contornar as regras.
 

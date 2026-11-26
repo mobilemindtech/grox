@@ -148,8 +148,8 @@ class User {
     }
     Set<Role> getAuthorities() { UserRole.findAllByUser(this)*.role as Set }
     def beforeInsert() { encodePassword() }
-    def beforeUpdate() { encodePassword() }
-    protected void encodePassword() { if (!Passwords.isEncoded(password)) password = Passwords.encode(password) }
+    def beforeUpdate() { if (isDirty('password')) encodePassword() }
+    protected void encodePassword() { password = Passwords.encode(password) }
 }
 class Role { String authority }
 class UserRole { User user; Role role }
@@ -213,7 +213,7 @@ As senhas ficam no formato do `DelegatingPasswordEncoder` do spring-security-cor
 | `SHA-256`, `SHA-512`, `SHA-1`, `MD5` | `{SHA-256}hash` sem sal, como o Grails 8, com `password.hash.iterations` repetições e base64 se `password.encodeHashAsBase64` | `{SHA-256}{sal}hash` |
 | `{noop}texto` | | Só para desenvolvimento |
 
-Para codificar: `springSecurityService.encodePassword(raw)` ou `org.grox.security.Passwords.encode(raw)`. `Passwords.isEncoded(x)` diz se já está codificada. pbkdf2, scrypt e argon2 não são suportados.
+Para codificar: `springSecurityService.encodePassword(raw)` ou `org.grox.security.Passwords.encode(raw)`. Codifique sempre que a senha mudar (`isDirty('password')`, como acima); `Passwords.isEncoded(x)` só reconhece hashes (bcrypt, ou digest com o tamanho certo), nunca `{noop}`, porque o valor pode vir do usuário. pbkdf2, scrypt e argon2 não são suportados.
 
 ### `passwordEncoder` da aplicação
 

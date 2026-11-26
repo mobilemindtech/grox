@@ -13,6 +13,8 @@ Legenda: ✅ suportado · 🟡 parcial · ❌ ausente (ver [roadmap](roadmap.md)
 | `grails-app/domain` | ✅ | GORM próprio sobre Hibernate 7.4 |
 | `application.yml` + `environments`, `application.groovy` e `runtime.groovy` (`ConfigSlurper`, mesclados ao yml) | ✅ | |
 | `spring.config.import` (`classpath:`, `file:`, `optional:`; `.yml` e `.groovy`; string com vírgulas ou lista) | ✅ | O importado vence quem o importou, como no Spring Boot. Sem `configtree:`, curingas nem perfis do Spring |
+| Perfil `grox` (`application-grox.yml`/`.groovy`) | ✅ (extensão Grox) | Sempre ativo no Grox, nunca no Grails; vence os demais arquivos. Outros perfis do Spring (`spring.profiles.active`) ❌ |
+| Build paralelo dentro do repositório Grails (`grox { source(dir) }`, `patches`) | ✅ (extensão Grox) | Plugin Gradle: compila o código original sem cópia, com overrides no projeto e patches em `build/grox-patched` |
 | `grails.util.Environment` | ✅ | `current`, `executeForCurrentEnvironment`; `environments {}` no BootStrap |
 | Plugins, profiles, `grails` CLI | ❌ | O plugin Gradle `org.grox.app` cobre o layout e o build. Artefatos compartilhados (o papel de um plugin do Grails): biblioteca `org.grox.lib` |
 | Scaffolding dinâmico (`static scaffold = Livro`) e tags `f:` do plugin fields | 🟡 | Actions do `RestfulController` e views geradas dos templates (`src/main/templates/scaffolding/`). Geração de código (`generate-all`), `scaffold = true` e os templates `_fields/` por propriedade ❌ |
@@ -59,7 +61,7 @@ Legenda: ✅ suportado · 🟡 parcial · ❌ ausente (ver [roadmap](roadmap.md)
 |---|---|---|
 | Variáveis, opcionais, `(.$format)?`, `**`, `$path**` | ✅ | |
 | `constraints { x(matches:) }`, params extras, `action = [GET:, POST:]` | ✅ | Outras constraints ❌ |
-| Verbos (`get`, `post`, ...), `method:`, `group`, `redirect:`, `view:` | ✅ | |
+| Verbos (`get`, `post`, ...), `method:`, `group`, `redirect:`, `view:` | ✅ | Outro verbo dá 405 só se o mapeamento levaria a um destino; 404 se nenhum leva a um controller e action existentes |
 | `resources:` | ✅ | `resource:` (singular), aninhamento ❌ |
 | Códigos de erro (`"404"`, `"500"`) | ✅ | `exception:` ❌ |
 | Mapeamentos nomeados (`name x: ...`), `uri:` | ❌ | |
@@ -88,7 +90,7 @@ Legenda: ✅ suportado · 🟡 parcial · ❌ ausente (ver [roadmap](roadmap.md)
 | Codecs `encodeAsHTML/URL/JSON/JavaScript/Raw`, `encodeAsMD5/SHA1/SHA256` (e `...Bytes`), `encodeAsBase64/Hex` | ✅ | Configuração de codec padrão ❌ |
 | Asset pipeline: `grails-app/assets`, `require`/`require_tree`/`require_self`, `url()` no CSS, digest e manifest no build, tags `asset:javascript/stylesheet/image/link/assetPath/assetPathExists` | ✅ | Implementação própria: o asset-pipeline-core 5.0.9 não roda no Groovy 6 e a 5.2.0-RC exige o GraalVM. Sem Babel/ES6, SASS, LESS, minificação, gzip nem modo "bundle=false" |
 | Pré-compilação das GSPs no build | ✅ | Plugin `org.grox.app` (`compileGsp`). Em desenvolvimento, compilação sob demanda com reload |
-| Recarga de controllers, services e domain classes no `run` | ✅ | Com classloaders por geração, sem spring-loaded nem devtools. Recarga leve para artefatos e completa para domain e `src/` (ver guia) |
+| Recarga de controllers, services e domain classes no `run` | ✅ | Com classloaders por geração, sem spring-loaded nem devtools. Recarga leve para artefatos e completa para domain e `src/` (ver guia). Também acompanha as bibliotecas `org.grox.lib` do mesmo build (no Grails, plugins locais com `grails { plugins { implementation project(...) } }`) |
 
 ## Dados
 

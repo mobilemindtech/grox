@@ -182,6 +182,39 @@ spring.config.import: [classpath:aninhado.yml]
         assert falta.message.contains('nao-existe.yml')
     }
 
+    @Test
+    void 'perfil grox mescla application-grox por cima de tudo'() {
+        Map<String, String> files = [
+                'application.yml'        : """
+server.port: 8080
+app.nome: app-c-web
+grails.plugin.springsecurity.csrf.enabled: true
+environments:
+  development:
+    dataSource.dbCreate: update
+""",
+                'application.groovy'     : "app.nome = 'groovy'",
+                'application-grox.yml'   : """
+grails.plugin.springsecurity.csrf.enabled: false
+dataSource.dbCreate: none
+environments:
+  test:
+    app.nome: grox no test
+spring.config.import: optional:classpath:grox-extra.yml
+""",
+                'grox-extra.yml'         : 'app.extra: sim',
+                'application-grox.groovy': "app.groovy = true"]
+        def dev = load('development', files)
+        assert dev.getProperty('grails.plugin.springsecurity.csrf.enabled', Boolean) == false
+        assert dev.getProperty('dataSource.dbCreate', String) == 'none'          // vence o environments do yml
+        assert dev.getProperty('app.nome', String) == 'groovy'                   // o que o perfil não muda continua
+        assert dev.getProperty('server.port', Integer) == 8080
+        assert dev.getProperty('app.extra', String) == 'sim'
+        assert dev.getProperty('app.groovy', Boolean)
+        assert load('test', files).getProperty('app.nome', String) == 'grox no test'
+        assert load('test', ['application.yml': 'app.nome: sem perfil']).getProperty('app.nome', String) == 'sem perfil'
+    }
+
     private static Throwable shouldFail(Class<? extends Throwable> type, Closure body) {
         try {
             body()

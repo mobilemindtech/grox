@@ -76,4 +76,14 @@ class ProjectDslTest {
         assert config.getProperty('grox.a', Integer) == 1 && config.getProperty('grox.b', Integer) == 3
         assert config.getProperty('novo.x', String) == '8080'   // placeholders resolvidos com a configuração final
     }
+
+    @Test
+    void 'interceptor da DSL casa o caminho com barra final, como a rota'() {
+        def i = new org.grox.dsl.Interceptor('before', '/admin/relatorio', { -> })
+        assert i.matches('/admin/relatorio') && i.matches('/admin/relatorio/')
+        assert !i.matches('/admin/relatorio/x') && !i.matches('/admin/relatoriox')
+        def um = new org.grox.dsl.Interceptor('before', '/admin/*', { -> })
+        assert um.matches('/admin/x') && um.matches('/admin/x/') && !um.matches('/admin/x/y')
+        assert new org.grox.dsl.Interceptor('before', '/', { -> }).matches('/')
+    }
 }

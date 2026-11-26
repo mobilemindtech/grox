@@ -77,5 +77,13 @@ MDBOOK="$(mdbook_bin)"
 case "${1:-build}" in
     build) "$MDBOOK" build "$DIR" && check_anchors && echo "livro gerado em ${DIR}/build/index.html" ;;
     serve) "$MDBOOK" serve "$DIR" ;;
+    publish)
+      
+    "$MDBOOK" build "$DIR" && check_anchors && echo "livro gerado em ${DIR}/build/index.html" && \
+      cd build && tar -cvzf grox.tar.gz * && \
+      scp grox.tar.gz s1:~/files/docs/grox && \
+      ssh s1 -t "cd ~/files/docs/grox && tar -xvzf grox.tar.gz" && \
+      echo "livro publicado"
+      ;;
     *) echo "uso: $0 [build|serve]" >&2; exit 2 ;;
 esac

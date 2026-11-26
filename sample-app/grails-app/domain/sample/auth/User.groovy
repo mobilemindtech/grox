@@ -32,10 +32,11 @@ class User {
     }
 
     def beforeUpdate() {
-        encodePassword()
+        if (isDirty('password')) encodePassword()
     }
 
+    /** Codifica sempre que a senha muda (não confia em prefixos como {noop}, que podem vir do usuário). */
     protected void encodePassword() {
-        if (password && !Passwords.isEncoded(password)) password = Passwords.encode(password)
+        if (password) password = Passwords.encode(password)
     }
 }

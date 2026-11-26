@@ -47,7 +47,10 @@ class ControllerArtefact implements org.grox.routing.RouteTarget {
         List<Method> candidates = annotated ?: type.declaredMethods.findAll { Method m ->
             Modifier.isPublic(m.modifiers) && !Modifier.isStatic(m.modifiers) && !m.synthetic &&
                     !m.name.contains('$') && !(m.name in NON_ACTIONS) &&
-                    !(m.name ==~ /(get|set|is)[A-Z].*/)
+                    !(m.name ==~ /(get|set|is)[A-Z].*/) &&
+                    // métodos do trait ControllerApi (redirect, render...) e os gerados: nunca são actions
+                    !m.isAnnotationPresent(groovy.transform.Generated) &&
+                    !m.isAnnotationPresent(org.codehaus.groovy.transform.trait.Traits.TraitBridge)
         }
         Map<String, ActionMethod> result = [:]
         // com parâmetros default o Groovy gera sobrecargas: usa a de mais parâmetros

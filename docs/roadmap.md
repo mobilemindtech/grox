@@ -37,6 +37,8 @@ Status: **não iniciado**. Ordem sugerida:
   - [ ] Eventos de domain `after*` e `beforeValidate`; `Pre*Update` também no flush automático (hoje só no `save()`)
 - [ ] **Desenvolvimento**
   - [x] Hot reload de controllers, services, taglibs, domain classes e `src/` no `run`, com classloaders por geração, recarga leve e completa, e Gradle contínuo incremental (ver [guia](guia.md#recarga-de-classes-em-desenvolvimento))
+  - [x] Recarga das bibliotecas `org.grox.lib` do mesmo build (diretas e transitivas), como o `app-c-core` do app-c: classes, resources, classpath do `run` sem os jars delas e Gradle contínuo; com fontes fora da raiz do build (build paralelo), Gradle sob demanda (`grox.reload.sources`), porque o contínuo não as vê (2026-11-04)
+  - [ ] Recarga das views das raízes externas do build paralelo (hoje chegam só pelo `processResources`)
   - [ ] Respostas em streaming e Server-Sent Events
   - [ ] Assets: minificação e gzip no `assetCompile`; avaliar o asset-pipeline 5.2.0 quando sair a versão estável
 
@@ -133,6 +135,52 @@ Revisão das mudanças desde `14c439e` (compatibilidades do app B e do app C, ch
 - [ ] `interceptUrlMap` do app-c-web (~288 regras) linear por requisição: índice por primeiro segmento, junto com o índice de rotas da Fase 7
 - [ ] Audit log síncrono pede uma segunda conexão com a da requisição presa: risco de esgotar o Hikari sob carga (`asyncWrite` como recomendação)
 
+## Revisão de qualidade, desempenho e segurança (2026-11-26)
+
+Revisão do framework inteiro (a modularização moveu todos os fontes desde a de 2026-10-02), por área: núcleo HTTP e DSL, GORM, web e views, segurança e plugins. Cada achado foi reproduzido com script ou confirmado no código.
+
+**Prioridade 1 (segurança, feito):**
+- [x] `_action_X` (`<g:actionSubmit>`) resolvido no `match`, antes da segurança: antes, o `@Secured` avaliado era o da action da URL e rodava outra
+- [x] Controller só com actions closure: os métodos do trait `ControllerApi` (`redirect`, `render`...) viravam actions (`/velho/redirect?url=...` era open redirect)
+- [x] Interceptor da DSL casa o caminho com barra final, como a rota (`before('/admin/x')` era contornado com `/admin/x/`)
+- [x] `@Secured` da action com outro `httpMethod`: vale o do controller (antes caía no `interceptUrlMap`)
+- [x] Logout REST revoga também o refresh token que gerou o access token (claim `rid`); refresh recusado com `passwordExpired`
+- [x] `Passwords.isEncoded` só reconhece hashes (antes, `{noop}segredo` vindo do usuário era gravado em texto puro); o padrão da documentação e do sample passou a codificar quando `isDirty('password')`
+- [x] `X-Forwarded-For` lido da direita para a esquerda, pulando os proxies confiáveis (o valor da esquerda pode ser forjado)
+
+**Prioridade 2 (disponibilidade e exceções por requisição):**
+- [ ] Multipart com mais de 128 campos: `TooManyFormFieldsException` fecha a conexão sem resposta e deixa o `inFlight` preso; `grox.http.maxFormFields`
+- [ ] `Accept` com `q` inválido: 500, três stack traces e o contador `active` das métricas preso (`MimeTypes.fromAccept`)
+- [ ] JWT com cabeçalho que não é objeto JSON: 500 com stack trace (`Jwt.verify`)
+- [ ] Caches do `MessageSource` crescem um mapa por locale vindo de `?lang=`/`Accept-Language`
+- [ ] Sessões em memória sem limite (`grox.session.maxActive`); GET anônimo numa página protegida cria sessão para guardar a URL
+- [ ] `maxPipelined` não limita as requisições decodificadas do mesmo read (`maxPipelineDepth` do codec)
+- [ ] Rotas da DSL carregam a sessão (Redis) no event loop, ao montar o `RouteContext`
+- [ ] `<g:datePicker>` com valor inválido: 500 em vez de `typeMismatch`
+
+**Prioridade 3 (correção, comparado ao Grails):**
+- [ ] Exceção numa transação participante não marca rollback-only: commit parcial silencioso
+- [ ] `Tenants.withId`/`@CurrentTenant` antes da primeira consulta da requisição: entidades destacadas (lazy falha na view)
+- [ ] Binding de `hasMany` por ids: `String` no `Set` da associação, e o `save` quebra
+- [ ] `sort` por caminho de associação: inner join (somem linhas, `totalCount` diverge); sort inválido dá 500
+- [ ] Violação de constraint no `persist` ou no commit não vira `DataIntegrityViolationException`
+- [ ] `${x.encodeAsHTML()}` e os outros `encodeAs*` escapados de novo pelo `${}`
+- [ ] `afterView` dos interceptors não roda quando a action ou a view lança exceção
+- [ ] Pug: `#{tag(...)}` escapa de novo o `SafeHtml` das tags
+- [ ] `@ReadOnly` faz flush das alterações (FlushMode MANUAL)
+
+**Prioridade 4 (desempenho e manutenção):**
+- [ ] Recarga: pools do Redis e conexões do RabbitMQ das gerações antigas não são fechados; `Logs.CACHE` e `ScaffoldViews.DOMAINS` retêm os classloaders
+- [ ] Pug em desenvolvimento recompila cada expressão (1,7 s contra 52 ms numa lista de 100)
+- [ ] Corpo da resposta copiado 2 a 3 vezes (`GroxResponse`, `NettyHttpHandler`, estáticos)
+- [ ] Reflexão por requisição: `layout` estático do controller e construtor da GSP
+- [ ] Regex das `constraints` de URL compilada a cada casamento
+- [ ] `getAll(ids)` com uma consulta por id; `exists(id)` carrega a entidade
+- [ ] `RabbitPublisher` abre e fecha um canal por mensagem
+- [ ] Views `.md`: o `${}` não escapa a sintaxe Markdown (links e imagens injetados)
+- [ ] `render(file: InputStream)` não fecha o stream
+- [ ] `PatchTask` do plugin Gradle aceita `..` nos caminhos dos patches
+
 ## Migração de apps reais
 
 Três aplicações Grails 8 privadas (apps A, B e C, de 61 a 404 domain classes) servem de candidatas à migração. O código delas não fica neste repositório; o que cada uma exigiu do Grox está em [Compatibilidade](compatibilidade.md) e no capítulo "Casos reais" do livro.
@@ -196,9 +244,9 @@ Iniciada em 2026-10-10 em `docs/livro/` (`docs/livro/build.sh` gera e confere li
 - Migrações de esquema (Flyway ou Liquibase) no lugar do `dbCreate: update`.
 - `as XML`, marshallers de JSON customizados.
 - Módulo separado para as domain classes, para compilar mais rápido em projetos grandes. No app A (1.382 classes, um módulo), mudar um controller, service ou classe de `src/` recompila 1 classe (2–3 s). Mudar a domain `Cidade`, referenciada por 16 arquivos, recompila **656** classes (~24 s): o Groovy é dinâmico, e o Gradle recompila tudo que depende da classe, direta ou indiretamente. Separar só as domain classes (a camada estável da recarga) resolveria; services, taglibs e controllers em módulos próprios não ganham nada. É preciso:
-  - um modo biblioteca no plugin `org.grox.app`, para um módulo com `grails-app/domain`;
-  - a recarga acompanhar também as classes desse módulo (`grox.reload.classes` e o Gradle contínuo), com recarga completa quando mudarem. Hoje ela só enxerga o módulo da aplicação, e mudanças em outros módulos exigem reiniciar;
-  - ligar a *compilation avoidance* do Groovy no Gradle (recurso em preview): mudança sem efeito na API (corpo de método, constraints, mapping) não recompila o módulo da app.
+  - ~~um modo biblioteca~~: o plugin `org.grox.lib`;
+  - ~~a recarga acompanhar também as classes desse módulo~~: feito (2026-11-04) para as bibliotecas `org.grox.lib` do mesmo build, ver `ReloadLibs` no plugin;
+  - ligar a *compilation avoidance* do Groovy no Gradle (recurso em preview): mudança sem efeito na API (corpo de método, constraints, mapping) não recompila o módulo da app. No app-c, mudar um service do `app-c-core` recompila o `app-c-web` inteiro (2 min de ~3 min até a recarga).
 - Recarga com HotSwap (a "camada 1", acima da recarga por gerações): um agente Java em development aplica `Instrumentation.redefineClasses` nas classes que mudaram. Depois disso, o framework limpa os caches que ficariam velhos: o metaclass do Groovy, as actions e o `allowedMethods` do `ControllerArtefact`, o autowiring de campos novos e os interceptors. Só volta à recarga por gerações quando a JVM recusar a mudança. A JVM padrão só troca corpo de método. Mudanças estruturais (métodos, campos e closures novos, o caso comum em Groovy) exigem o JetBrains Runtime com `-XX:+AllowEnhancedClassRedefinition`, que ainda não tem versão para o JDK 27. Ganho esperado: manter o estado dos services e a sessão intactos em mudanças de corpo de método.
 
 ## Pendências conhecidas

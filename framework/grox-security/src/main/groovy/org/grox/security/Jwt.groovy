@@ -32,9 +32,17 @@ class Jwt {
         this.expirationSeconds = expirationSeconds
     }
 
-    String create(GroxUser user) {
+    /**
+     * @param refresh claims do refresh token que acompanha este access token: o {@code jti} dele vai em {@code rid}
+     *                (e a expiração em {@code rexp}), para o logout revogar os dois
+     */
+    String create(GroxUser user, Map refresh = null) {
         long now = System.currentTimeMillis().intdiv(1000)
         Map claims = [sub: user.username, roles: user.roles as List, iat: now, exp: now + expirationSeconds, iss: ISSUER, jti: UUID.randomUUID().toString()]
+        if (refresh?.jti) {
+            claims.rid = refresh.jti
+            claims.rexp = refresh.exp
+        }
         if (user.tenantId != null) claims.tenant = user.tenantId
         if (user.id != null) claims.uid = user.id
         encode(claims)
@@ -57,7 +65,7 @@ class Jwt {
         if (claims == null || claims.typ == 'refresh') return null
         def user = new GroxUser(username: claims.sub, tenantId: (Serializable) claims.tenant, id: (Serializable) claims.uid)
         user.roles = (claims.roles ?: []) as List<String>
-        new Authentication(principal: user, method: 'bearer', credentials: [jti: claims.jti, exp: claims.exp])
+        new Authentication(principal: user, method: 'bearer', credentials: [jti: claims.jti, exp: claims.exp, rid: claims.rid, rexp: claims.rexp])
     }
 
     /** Claims de um refresh token válido (ou null). */
@@ -68,6 +76,12 @@ class Jwt {
 
     void revoke(Map claims) {
         if (claims?.jti) revocations.revoke(claims.jti.toString(), claims.exp as long)
+    }
+
+    /** Revoga o access token e o refresh token que o gerou ({@code rid}). */
+    void revokeWithRefresh(Map credentials) {
+        revoke(credentials)
+        if (credentials?.rid && credentials.rexp != null) revocations.revoke(credentials.rid.toString(), credentials.rexp as long)
     }
 
     /** Assinatura, emissor, expiração e revogação. */

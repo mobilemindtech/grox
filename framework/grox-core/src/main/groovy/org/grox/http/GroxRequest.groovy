@@ -217,9 +217,24 @@ class GroxRequest implements jakarta.servlet.http.HttpServletRequest, org.spring
         fromTrustedProxy ? getHeader(name)?.split(',')?.first()?.trim() ?: null : null
     }
 
-    /** Endereço do cliente: o do {@code X-Forwarded-For} atrás de proxy confiável, senão o da conexão. */
+    /**
+     * Endereço do cliente. Atrás de proxy confiável, o {@code X-Forwarded-For} é lido da direita para a esquerda,
+     * pulando os proxies confiáveis, como o {@code RemoteIpValve} do Tomcat: o proxy acrescenta o endereço real
+     * à direita do valor que o cliente mandou, então o primeiro valor da esquerda pode ser forjado.
+     */
     String getClientAddr() {
-        forwarded('X-Forwarded-For') ?: remoteHost
+        if (!fromTrustedProxy) return remoteHost
+        String header = getHeader('X-Forwarded-For')
+        if (!header) return remoteHost
+        String[] hops = header.split(',')
+        String leftmost = null
+        for (int i = hops.length - 1; i >= 0; i--) {
+            String hop = hops[i].trim()
+            if (!hop) continue
+            leftmost = hop
+            if (!trustedProxies.matcher(hop).matches()) return hop
+        }
+        leftmost ?: remoteHost
     }
 
     String getScheme() {

@@ -54,6 +54,8 @@ Aplica os plugins `groovy` e `application` e:
 | `precompileGsp` | `true` | Pré-compila as GSPs no build. Um erro de GSP falha o build com arquivo e linha |
 | `fastDevStartup` | `true` | `run` com `-XX:TieredStopAtLevel=1` (JIT só C1): sobe de 25% a 40% mais rápido. Desligue para medir desempenho |
 | `reload` | `true` | `run` com recarga de classes em development (passa as propriedades `grox.reload.*` à app) |
+| `source(dir) { include/exclude }` | nenhuma | Raiz de código fora do projeto, com o layout do Grails (`grails-app/` e `src/main/`); padrões relativos à raiz. Um arquivo de mesmo caminho numa raiz posterior (que os padrões dela aceitem) ou no projeto substitui o da raiz. Também no `org.grox.lib` *(extensão Grox)*. Ver [Build paralelo](../migracao/build-paralelo.md) |
+| `patches` | vazio | Diffs unificados (arquivos ou diretórios de `*.patch`, caminhos relativos à raiz) aplicados a cópias em `build/grox-patched`. Também no `org.grox.lib` *(extensão Grox)* |
 
 ### Tarefas
 
@@ -62,6 +64,7 @@ Aplica os plugins `groovy` e `application` e:
 | `compileGsp` | build | Pré-compila `grails-app/views` (classe `org.grox.view.gsp.GspPrecompiler`) para `build/gsp-classes`, que entra no classpath e no jar. Pulada sem o diretório de views ou com `precompileGsp = false` |
 | `assetCompile` | build | Processa `grails-app/assets` (diretivas `require`, digest, `manifest.properties`) para `build/assets` (`META-INF/assets` no classpath). Pulada sem o diretório |
 | `groxPackageIndex` | | Lista em `META-INF/grox/packages` os pacotes dos fontes de `grails-app/`, e `class:Nome` para fontes sem `package` |
+| `groxPatch` | | Só com `patches`: copia os originais alterados para `build/grox-patched` e aplica os patches (`patch -p1`). Um patch que não se aplica mais falha o build |
 | `groxReloadStamp` | | Compila e grava `build/grox-reload/stamp`. É a tarefa que o Gradle contínuo da recarga executa; o carimbo novo dispara a recarga |
 | `aotCache` | distribution | Depende de `installDist`. Roda `bin/<app>` uma vez em modo de treino (`-XX:AOTCacheOutput`, `-Dgrox.aot.training=true`, porta aleatória): a app sobe, encerra ao ficar pronta e deixa `lib/grox.aot` |
 
@@ -73,13 +76,14 @@ O `run` passa à app, por propriedades de sistema, os diretórios de classes e r
 
 | Propriedade | Valor |
 |---|---|
-| `grox.reload.classes` | Diretórios de classes do `main` |
-| `grox.reload.resources` | Diretório de resources do `main` |
+| `grox.reload.classes` | Diretórios de classes do `main` e das bibliotecas `org.grox.lib` do mesmo build |
+| `grox.reload.resources` | Diretórios de resources do `main` e dessas bibliotecas |
 | `grox.reload.gradlew` | Caminho do `gradlew` |
 | `grox.reload.tasks` | `:<projeto>:groxReloadStamp` |
 | `grox.reload.stamp` | `build/grox-reload/stamp` |
+| `grox.reload.sources` | Só quando algum diretório de fontes (da app ou das bibliotecas) está fora da raiz do build: todos os diretórios de fontes. A app os observa e roda o Gradle sob demanda, no lugar do contínuo |
 
-Sem `gradlew`, ou com `-Dgrox.reload.compile=false`, a IDE compila. Veja [Recarga em desenvolvimento](../recursos/recarga.md).
+O classpath do `run` traz a saída dessas bibliotecas (classes e resources) no lugar dos jars (o `compileGroovy` da app usa os jars, e o Gradle os reescreveria com a JVM rodando), e o `groxReloadStamp` também as compila. Sem `gradlew`, ou com `-Dgrox.reload.compile=false`, a IDE compila. Veja [Recarga em desenvolvimento](../recursos/recarga.md).
 
 ### AOT cache
 
@@ -108,7 +112,8 @@ dependencies { implementation project(':core') }
 
 - A app descobre os artefatos da biblioteca pelo índice `META-INF/grox/packages`, sem configuração.
 - As `messages*.properties` da biblioteca são mescladas com as da app, e a app prevalece.
-- Views, assets, `application.yml` e a recarga de classes continuam só na aplicação.
+- Views, assets e `application.yml` continuam só na aplicação.
+- No `run` da app, as classes da biblioteca (do mesmo build) recarregam como as da app. Ver [Recarga em desenvolvimento](../recursos/recarga.md#bibliotecas-orggroxlib).
 
 ## Apps sem `grails-app/`
 

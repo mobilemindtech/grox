@@ -16,7 +16,12 @@ class SecuredRules implements AccessRuleSource {
         if (!(route?.controller instanceof ControllerArtefact)) return null
         ControllerArtefact controller = (ControllerArtefact) route.controller
         ActionMethod action = controller.actions[route.actionName]
-        Secured s = action?.method?.getAnnotation(Secured) ?: controller.type.getAnnotation(Secured)
-        s != null && (s.httpMethod() == 'ANY' || s.httpMethod().equalsIgnoreCase(req.method)) ? s.value().toList() : null
+        // a da action só vale para o seu httpMethod; nos demais métodos vale a do controller
+        List<String> access = rules(action?.method?.getAnnotation(Secured), req.method)
+        access != null ? access : rules(controller.type.getAnnotation(Secured), req.method)
+    }
+
+    private static List<String> rules(Secured s, String method) {
+        s != null && (s.httpMethod() == 'ANY' || s.httpMethod().equalsIgnoreCase(method)) ? s.value().toList() : null
     }
 }

@@ -21,7 +21,11 @@ import java.util.zip.CRC32
  *   <li><b>completa</b>: mudou domain, src/main/groovy ou a configuração ({@code application.yml}, {@code application.groovy}, {@code runtime.groovy} e os importados). Fecha tudo (menos servidor e
  *       sessões) e sobe de novo, como um restart; as requisições esperam a nova geração.</li>
  * </ul>
- * Quem compila é o Gradle contínuo iniciado aqui ({@code grox.reload.gradlew}, passado pelo plugin) ou a IDE.
+ * As classes podem vir de vários diretórios: a aplicação e as bibliotecas {@code org.grox.lib} do mesmo build
+ * (o plugin Gradle passa todos); as de uma biblioteca recarregam como as da aplicação.
+ * Quem compila é o Gradle contínuo iniciado aqui ({@code grox.reload.gradlew}, passado pelo plugin) ou a IDE. Com
+ * {@code grox.reload.sources} (fontes fora da raiz do build, que o Gradle contínuo não observa), o Gradle roda sob
+ * demanda: a cada mudança nos fontes, uma execução de {@code grox.reload.tasks}.
  */
 @Slf4j
 class DevReloader implements AutoCloseable {
@@ -40,7 +44,9 @@ class DevReloader implements AutoCloseable {
     /** Última geração que subiu (fornece servidor e sessões à próxima completa). */
     private GroxRuntime last
     private int generation
-    private Process compiler
+    private volatile Process compiler
+    /** Modo sob demanda ({@code grox.reload.sources}): a thread que observa os fontes e roda o Gradle. */
+    private Thread builder
     private Thread watcher
     private volatile boolean closed
 
@@ -87,7 +93,8 @@ class DevReloader implements AutoCloseable {
         startCompiler()
         watcher = Thread.ofPlatform().daemon().name('grox-reload').start { watch() }
         log.info("Recarga ativa: ${classes.reloadable.size()} classes recarregáveis, ${classes.stable.size()} estáveis" +
-                (compiler ? '; compilando com o Gradle contínuo' : '; compile pela IDE ou com gradle -t classes'))
+                (builder ? '; Gradle sob demanda (fontes fora da raiz do build)' :
+                        compiler ? '; compilando com o Gradle contínuo' : '; compile pela IDE ou com gradle -t classes'))
         current
     }
 
@@ -172,13 +179,13 @@ class DevReloader implements AutoCloseable {
         }
     }
 
-    /** Arquivos de recursos que importam (views e assets já têm reload próprio): caminho → CRC. */
     /**
      * Arquivos de configuração: mudar um deles pede a recarga completa. Qualquer {@code .yml} ou {@code .groovy}
      * na raiz dos recursos, para incluir os importados por {@code spring.config.import}.
      */
     static final java.util.regex.Pattern CONFIG_FILES = ~/[^\/]+\.(ya?ml|groovy)/
 
+    /** Arquivos de recursos que importam (views e assets já têm reload próprio): caminho → CRC. */
     private Map<String, Long> resourceChecksums() {
         Map<String, Long> result = [:]
         for (Path dir : resourceDirs) {
@@ -190,7 +197,9 @@ class DevReloader implements AutoCloseable {
                     try {
                         def crc = new CRC32()
                         crc.update(Files.readAllBytes(p))
-                        result[rel] = crc.value
+                        // o mesmo caminho em mais de uma raiz (app e bibliotecas): a mudança em qualquer uma conta
+                        Long before = result[rel]
+                        result[rel] = before == null ? crc.value : before * 31 + crc.value
                     } catch (IOException ignored) {
                         // removido no meio da cópia
                     }
@@ -202,8 +211,12 @@ class DevReloader implements AutoCloseable {
 
     /** Assinatura barata (nomes, tamanhos e datas) para detectar escrita; o CRC só é lido depois. */
     private long signature() {
+        signature(classDirs + resourceDirs)
+    }
+
+    private static long signature(List<Path> dirs) {
         long h = 17
-        for (Path dir : classDirs + resourceDirs) {
+        for (Path dir : dirs) {
             if (!Files.isDirectory(dir)) continue
             try {
                 Files.walk(dir).withCloseable { stream ->
@@ -230,7 +243,7 @@ class DevReloader implements AutoCloseable {
      */
     private void watch() {
         String stampPath = System.getProperty('grox.reload.stamp')
-        if (compiler != null && stampPath) {
+        if ((compiler != null || builder != null) && stampPath) {
             watchStamp(Paths.get(stampPath))
             return
         }
@@ -288,6 +301,12 @@ class DevReloader implements AutoCloseable {
         String tasks = System.getProperty('grox.reload.tasks')
         if (!gradlew || !tasks || !Boolean.parseBoolean(System.getProperty('grox.reload.compile', 'true'))) return
         File wrapper = new File(gradlew)
+        List<Path> sources = paths(System.getProperty('grox.reload.sources'))
+        if (sources) {
+            List<String> once = [wrapper.absolutePath, '-q'] + tasks.split(/\s+/).toList()
+            builder = Thread.ofPlatform().daemon().name('grox-reload-gradle').start { buildOnChange(wrapper, once, sources) }
+            return
+        }
         List<String> cmd = [wrapper.absolutePath, '-q', '--continuous'] + tasks.split(/\s+/).toList()
         try {
             compiler = new ProcessBuilder(cmd).directory(wrapper.parentFile).inheritIO().start()
@@ -296,14 +315,45 @@ class DevReloader implements AutoCloseable {
         }
     }
 
+    /**
+     * Modo sob demanda: quando a assinatura dos fontes muda e fica estável por um intervalo, roda o Gradle uma vez.
+     * O carimbo gravado no fim dispara a recarga ({@link #watchStamp}); uma compilação com erro não grava carimbo.
+     */
+    private void buildOnChange(File wrapper, List<String> cmd, List<Path> sources) {
+        long last = signature(sources)
+        boolean dirty = false
+        while (!closed) {
+            try {
+                Thread.sleep(intervalMs)
+                long now = signature(sources)
+                if (now != last) {
+                    last = now
+                    dirty = true
+                } else if (dirty) {
+                    dirty = false
+                    compiler = new ProcessBuilder(cmd).directory(wrapper.parentFile).inheritIO().start()
+                    int code = compiler.waitFor()
+                    compiler = null
+                    if (code != 0) log.warn("Recarga: a compilação falhou (gradle saiu com ${code}); continua a versão anterior")
+                }
+            } catch (InterruptedException ignored) {
+                return
+            } catch (Throwable e) {
+                log.error('Recarga: erro ao rodar o Gradle', e)
+            }
+        }
+    }
+
     @Override
     void close() {
         if (closed) return
         closed = true
         watcher?.interrupt()
-        if (compiler != null) {
-            compiler.descendants().forEach { it.destroy() }
-            compiler.destroy()
+        builder?.interrupt()
+        Process running = compiler
+        if (running != null) {
+            running.descendants().forEach { it.destroy() }
+            running.destroy()
         }
         synchronized (this) {
             (current ?: last)?.close()

@@ -153,6 +153,11 @@ class SecurityTest {
         assert Passwords.matches('segredo', hash.substring(8))   // sem prefixo, como o Grox gravava antes
         assert Passwords.matches('abc', '{noop}abc') && !Passwords.matches('abd', '{noop}abc')
         assert !Passwords.matches('x', null) && !Passwords.matches('x', 'texto-puro')
+        // isEncoded só reconhece hashes: senha escolhida pelo usuário com prefixo não escapa da codificação
+        assert !Passwords.isEncoded('{noop}segredo') && !Passwords.isEncoded('{MD5}qualquer') && !Passwords.isEncoded('{SHA-256}')
+        assert !Passwords.isEncoded('segredo') && !Passwords.isEncoded(null)
+        assert Passwords.isEncoded('{MD5}' + 'a' * 32) && Passwords.isEncoded('{SHA-256}{sal}' + 'b' * 64)
+        assert Passwords.isEncoded('{SHA-1}' + 'QUJDREVGR0hJSktMTU5PUFFSU1Q=') && !Passwords.isEncoded('{SHA-1}' + 'x' * 39)
     }
 
     @Test
@@ -267,6 +272,57 @@ class SecurityTest {
     void 'actions closure: so propriedades, campo private nao vira action'() {
         def c = new org.grox.web.ControllerArtefact(PainelController)
         assert 'lista' in c.actions.keySet() && 'index' in c.actions.keySet() && !('ajudante' in c.actions.keySet())
+    }
+
+    @Test
+    void 'refresh recusado para conta desabilitada, bloqueada ou com senha expirada'() {
+        def cfg = SecurityConfig.from(new Config([grails: [plugin: [springsecurity: [
+                rest: [token: [storage: [jwt: [secret: '0123456789abcdef0123456789abcdef']]]]]]]]))
+        def f = new SecurityFilter(cfg)
+        f.sessions = new org.grox.session.MemorySessionRepository('SESSION', 60)
+        def user = new GroxUser(username: 'ana', password: '{noop}x', enabled: true)
+        user.roles = ['ROLE_USER']
+        f.users = { String n -> n == 'ana' ? user : null } as org.grox.security.UserDetailsService
+        String refresh = f.jwt.createRefresh(user)
+        Closure<Integer> renovar = {
+            def r = new GroxRequest(method: 'POST', path: '/oauth/access_token', uri: '/oauth/access_token')
+            r.formParameters = [grant_type: ['refresh_token'], refresh_token: [refresh]]
+            f.process(r, null).response.status
+        }
+        assert renovar() == 200
+        user.passwordExpired = true
+        assert renovar() == 403   // antes: renovava até o refresh vencer (30 dias)
+        user.passwordExpired = false
+        user.accountLocked = true
+        assert renovar() == 403
+    }
+
+    @grails.plugin.springsecurity.annotation.Secured('ROLE_ADMIN')
+    static class RelatorioController {
+        @grails.plugin.springsecurity.annotation.Secured(value = 'ROLE_USER', httpMethod = 'POST')
+        def gerar() { 'ok' }
+        def index() { 'ok' }
+    }
+
+    @Test
+    void '@Secured da action com outro httpMethod: vale o do controller'() {
+        def rules = new org.grox.plugins.springsecurity.SecuredRules()
+        def route = { String a -> new org.grox.routing.RouteMatch(controller: new org.grox.web.ControllerArtefact(RelatorioController), actionName: a) }
+        Closure<GroxRequest> req = { String m -> new GroxRequest(method: m, path: '/relatorio/gerar', uri: '/relatorio/gerar') }
+        assert rules.accessFor(req('POST'), route('gerar')) == ['ROLE_USER']
+        // antes: null, e a decisão caía no interceptUrlMap (um '/**' isAuthenticated() deixava passar)
+        assert rules.accessFor(req('GET'), route('gerar')) == ['ROLE_ADMIN']
+        assert rules.accessFor(req('GET'), route('index')) == ['ROLE_ADMIN']
+    }
+
+    @Test
+    void 'controller so com actions closure: metodos do ControllerApi nao viram actions'() {
+        def gcl = new GroovyClassLoader(SecurityTest.classLoader)
+        def src = 'class VelhoController {\n    def lista = { render \'x\' }\n}'
+        Class<?> type = gcl.parseClass(new GroovyCodeSource(src, '/app/grails-app/controllers/VelhoController.groovy', '/groovy/script'))
+        assert org.grox.web.api.ControllerApi.isAssignableFrom(type)   // a AST aplicou o trait
+        // antes: redirect, render, respond, bindData... viravam actions (GET /velho/redirect?url=... era open redirect)
+        assert new org.grox.web.ControllerArtefact(type).actions.keySet() == ['lista'] as Set
     }
 
     @Test

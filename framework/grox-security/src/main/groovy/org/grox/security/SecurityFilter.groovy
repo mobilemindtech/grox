@@ -403,7 +403,7 @@ class SecurityFilter {
                                                                 access_token: token]))
         }
         String refreshToken = jwt.createRefresh(user)
-        String accessToken = jwt.create(user)
+        String accessToken = jwt.create(user, jwt.verifyRefresh(refreshToken))
         tokenIssued(user, accessToken, refreshToken, jwt.expirationSeconds)
         tokens(user, refreshToken, accessToken)
     }
@@ -438,20 +438,21 @@ class SecurityFilter {
         if (grant != 'refresh_token' || !token) return SecurityOutcome.json(400, JsonOutput.toJson([error: 'invalid_request']))
         Map claims = jwt.verifyRefresh(token)
         GroxUser user = claims ? users.loadUserByUsername(claims.sub.toString()) : null
-        if (user == null || !user.enabled || user.accountLocked || user.accountExpired) {
+        if (user == null || !user.enabled || user.accountLocked || user.accountExpired || user.passwordExpired) {
             return SecurityOutcome.json(403, JsonOutput.toJson([error: 'invalid_grant']))
         }
-        tokens(user.withoutPassword(), token)
+        GroxUser semSenha = user.withoutPassword()
+        tokens(semSenha, token, jwt.create(semSenha, claims))
     }
 
-    /** Revoga o access token atual (GORM: apaga o registro) e, se enviado, o refresh token. */
+    /** Revoga o access token atual (GORM: apaga o registro) e o refresh token que o gerou (também se vier no corpo). */
     private SecurityOutcome restLogout(GroxRequest req, Authentication auth) {
         if (auth?.method != 'bearer') return unauthorized(cfg.useBearerToken ? 'Envie o token em Authorization: Bearer' : "Envie o token no cabeçalho ${cfg.tokenHeaderName}")
         if (jwt == null) {
             tokenStore.remove(auth.credentials.token.toString())
             return SecurityOutcome.json(200, JsonOutput.toJson([status: 'logged out']))
         }
-        jwt.revoke(auth.credentials)
+        jwt.revokeWithRefresh((Map) auth.credentials)
         Object body = null
         try {
             body = req.jsonRequest ? req.JSON : null

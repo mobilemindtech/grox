@@ -189,8 +189,8 @@ class Usuario {
     boolean accountExpired, accountLocked, passwordExpired
     static constraints = { username blank: false, unique: true; password blank: false }
     def beforeInsert() { encode() }
-    def beforeUpdate() { encode() }
-    protected void encode() { if (!Passwords.isEncoded(password)) password = Passwords.encode(password) }
+    def beforeUpdate() { if (isDirty('password')) encode() }
+    protected void encode() { password = Passwords.encode(password) }
 }
 @Entity class Papel { String authority }
 @Entity class UsuarioPapel { Usuario user; Papel role }
@@ -216,7 +216,7 @@ get('/minha-conta', access: 'isAuthenticated()') {
 }
 ```
 
-Para codificar senhas: `org.grox.security.Passwords.encode(raw)` (conforme `password.algorithm`, padrão bcrypt) e `Passwords.isEncoded(valor)`.
+Para codificar senhas: `org.grox.security.Passwords.encode(raw)` (conforme `password.algorithm`, padrão bcrypt); codifique sempre que a senha mudar. `Passwords.isEncoded(valor)` só reconhece hashes (nunca `{noop}`).
 
 ## Veja também
 

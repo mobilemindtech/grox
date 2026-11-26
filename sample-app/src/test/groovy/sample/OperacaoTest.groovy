@@ -83,6 +83,21 @@ class OperacaoTest {
         c.bearer = null
         assert c.send('POST', '/oauth/access_token', [grant_type: 'refresh_token', refresh_token: login.refresh_token]).status() == 403
         assert c.send('POST', '/oauth/access_token', [grant_type: 'password']).status() == 400
+
+        // logout só com o Bearer também revoga o refresh token que gerou o access token
+        def outro = TestClient.parse(c.send('POST', '/api/login', [username: 'maria', password: 'maria']))
+        def d = new TestClient(base)
+        d.bearer = outro.access_token
+        assert d.send('POST', '/api/logout').status() == 200
+        d.bearer = null
+        assert d.send('POST', '/oauth/access_token', [grant_type: 'refresh_token', refresh_token: outro.refresh_token]).status() == 403
+        // e o access token obtido pelo refresh também leva o vínculo
+        def terceiro = TestClient.parse(c.send('POST', '/api/login', [username: 'maria', password: 'maria']))
+        String renovado = TestClient.parse(c.send('POST', '/oauth/access_token', [grant_type: 'refresh_token', refresh_token: terceiro.refresh_token])).access_token
+        d.bearer = renovado
+        assert d.send('POST', '/api/logout').status() == 200
+        d.bearer = null
+        assert d.send('POST', '/oauth/access_token', [grant_type: 'refresh_token', refresh_token: terceiro.refresh_token]).status() == 403
     }
 
     @Test

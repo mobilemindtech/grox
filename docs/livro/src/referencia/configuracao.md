@@ -10,11 +10,12 @@ A configuração vem destes lugares, do que vence para o que perde:
 |---:|---|---|
 | 1 | Propriedade de sistema | `-Dserver.port=9000` |
 | 2 | Variável de ambiente (pontos viram `_`, maiúsculas) | `SERVER_PORT=9000` |
-| 3 | `runtime.groovy` | `grox.console.enabled = true` |
-| 4 | `application.groovy` | `grails.plugin.springsecurity.controllerAnnotations.staticRules = [...]` |
-| 5 | `application.yml` | `server: { port: 8080 }` |
-| 6 | `config { }` da DSL de projeto (só nas apps `grox-dsl`) | `config { grox.routes.poolSize = 4 }` |
-| 7 | Padrão do framework | `8080` |
+| 3 | `application-grox.yml` e `application-grox.groovy` (perfil `grox`, *extensão Grox*) | `grails.plugin.springsecurity.csrf.enabled: false` |
+| 4 | `runtime.groovy` | `grox.console.enabled = true` |
+| 5 | `application.groovy` | `grails.plugin.springsecurity.controllerAnnotations.staticRules = [...]` |
+| 6 | `application.yml` | `server: { port: 8080 }` |
+| 7 | `config { }` da DSL de projeto (só nas apps `grox-dsl`) | `config { grox.routes.poolSize = 4 }` |
+| 8 | Padrão do framework | `8080` |
 
 - **Onde ficam os arquivos:** em `grails-app/conf/` nas apps com o layout do Grails; no classpath (`src/main/resources/`) nas apps sem `grails-app/`.
 - **Groovy antes do YAML:** a ordem segue a do Grails, que registra o carregador do `application.groovy` antes do do YAML. Os arquivos `.groovy` usam a sintaxe do `ConfigSlurper`, com `environments { }`, e o `runtime.groovy` pode referenciar classes da aplicação.
@@ -27,6 +28,7 @@ A configuração vem destes lugares, do que vence para o que perde:
       import: classpath:shared.yml,classpath:rabbitmq.groovy,optional:file:/etc/app/extra.yml
   ```
 
+- **Perfil `grox`** *(extensão Grox)*: `application-grox.yml` e `application-grox.groovy`, opcionais, são lidos por último e vencem todos os outros arquivos (inclusive os importados). Aceitam `environments` e `spring.config.import`. O Grails não os lê (no Spring Boot, só com o perfil `grox` ativo), por isso é ali que o [build paralelo](../migracao/build-paralelo.md) de uma app Grails guarda os ajustes do Grox. Outros perfis do Spring não são suportados.
 - **Variáveis de ambiente só valem para valores-folha.** Um bloco do YAML (`mail:`) nunca é escondido por uma variável homônima (`MAIL` do shell).
 - **Vários documentos e ambientes:** o YAML aceita documentos separados por `---`, o bloco `environments:` e chaves com ponto (`grox.session.store: redis`). Veja [Ambientes](ambientes.md).
 - **Recarga:** mudar qualquer um dos arquivos de configuração em desenvolvimento (inclusive os importados: qualquer `.yml` ou `.groovy` na raiz dos recursos) faz a recarga completa da aplicação.
@@ -73,7 +75,7 @@ config.api.base                                              // navegação
 | `grox.http.idleTimeout` | `60` | Segundos sem tráfego até fechar uma conexão keep-alive sem resposta pendente. `0` desliga |
 | `grox.http.maxConnections` | `10000` | Conexões simultâneas; as excedentes são fechadas. `0` sem limite |
 | `grox.http.maxPipelined` | `16` | Requisições em voo por conexão (HTTP pipelining) antes de pausar a leitura |
-| `grox.http.trustedProxies` | loopback, `10.x`, `172.16-31.x`, `192.168.x`, `169.254.x`, `::1` | Regex dos endereços cujos `X-Forwarded-For`, `X-Forwarded-Proto` e `X-Forwarded-Host` são aceitos, como o `internalProxies` do Tomcat. Vazio (`''`): nenhum *(extensão Grox)* |
+| `grox.http.trustedProxies` | loopback, `10.x`, `172.16-31.x`, `192.168.x`, `169.254.x`, `::1` | Regex dos endereços cujos `X-Forwarded-For`, `X-Forwarded-Proto` e `X-Forwarded-Host` são aceitos, como o `internalProxies` do Tomcat. O endereço do cliente é o primeiro do `X-Forwarded-For` que não é proxy confiável, lido da direita para a esquerda (o da esquerda pode ser forjado). Vazio (`''`): nenhum *(extensão Grox)* |
 | `grox.http.securityHeaders` | ver abaixo | Cabeçalhos acrescentados às respostas que não os definem *(extensão Grox)* |
 
 `grox.http.securityHeaders` envia por padrão `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN` e `Referrer-Policy: strict-origin-when-cross-origin`. Um mapa troca ou acrescenta cabeçalhos, valor vazio remove um, e `false` desliga todos:
@@ -174,7 +176,7 @@ Os diretórios de desenvolvimento só são usados com `grox.gsp.reload` ligado e
 | `grox.reload.enabled` | `true` | Recarga de classes no `run` em development. Também `-Dgrox.reload.enabled=false` |
 | `-Dgrox.reload.compile` | `true` | `false`: não inicia o Gradle contínuo; a IDE compila e a recarga dispara quando os diretórios de classes param de mudar |
 | `-Dgrox.reload.interval` | `500` | Intervalo do monitoramento, em ms |
-| `-Dgrox.reload.classes`, `-Dgrox.reload.resources`, `-Dgrox.reload.gradlew`, `-Dgrox.reload.tasks`, `-Dgrox.reload.stamp` | | Definidas pelo plugin Gradle no `run`. Não as defina à mão |
+| `-Dgrox.reload.classes`, `-Dgrox.reload.resources`, `-Dgrox.reload.gradlew`, `-Dgrox.reload.tasks`, `-Dgrox.reload.stamp`, `-Dgrox.reload.sources` | | Definidas pelo plugin Gradle no `run` (`classes` e `resources` incluem as bibliotecas `org.grox.lib` do mesmo build; `sources` só com fontes fora da raiz do build). Não as defina à mão |
 
 A extensão `grox { reload = false }` do `build.gradle` desliga a recarga sem passar as propriedades. Veja [Recarga em desenvolvimento](../recursos/recarga.md).
 

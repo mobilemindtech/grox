@@ -140,4 +140,36 @@ class UrlMappingsTest {
         assert holder.match('/livro/apagar', 'GET', destinos) == null
         assert new org.grox.routing.LinkGenerator(holder, destinos, null).link([controller: 'livro', action: 'show', id: 5]) == '/livro/show/5'
     }
+
+    @Test
+    void 'verbo errado so da 405 quando o mapeamento levaria a um controller e action existentes'() {
+        // os mapeamentos REST genéricos do perfil rest-api do Grails (app-c-api)
+        Closure mappings = {
+            delete "/$controller/$id(.$format)?"(action: 'delete')
+            get "/$controller(.$format)?"(action: 'index')
+            get "/$controller/$id(.$format)?"(action: 'show')
+            post "/$controller(.$format)?"(action: 'save')
+            "/livros/$id"(controller: 'livro') {
+                action = [GET: 'show']
+            }
+        }
+        def builder = new UrlMappingsBuilder()
+        mappings.delegate = builder
+        mappings.resolveStrategy = Closure.DELEGATE_FIRST
+        mappings.call()
+        def holder = new UrlMappingsHolder(builder.mappings)
+        def destinos = [livro: new Destino(defaultAction: 'index', acoes: ['index', 'show', 'save'] as Set)]
+
+        // controller inexistente: 404 (null), não 405 pelo delete/post de mesmo caminho
+        assert holder.match('/nao-existe', 'GET', destinos) == null
+        assert holder.match('/nao-existe/5', 'GET', destinos) == null
+        // destino existe, só o verbo é outro: 405 (o livro não tem delete, mas o GET leva ao show)
+        assert holder.match('/livro/5', 'DELETE', destinos).methodNotAllowed
+        assert holder.match('/livro', 'PUT', destinos).methodNotAllowed
+        assert holder.match('/livros/5', 'POST', destinos).methodNotAllowed
+        // e os verbos certos continuam casando
+        assert holder.match('/livro/5', 'GET', destinos).actionName == 'show'
+        assert holder.match('/livro', 'POST', destinos).actionName == 'save'
+        assert holder.match('/livros/5', 'HEAD', destinos).actionName == 'show'
+    }
 }

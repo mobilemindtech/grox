@@ -38,6 +38,21 @@ Um artefato recarregável referenciado por uma classe estável (por exemplo, um 
 - Cada recarga sobe uma nova *geração*. A entrada do Netty troca de geração sem fechar conexões.
 - Se a recarga completa falhar (erro no BootStrap, mapeamento inválido), as requisições recebem **503** com o erro até a próxima mudança corrigir.
 
+## Bibliotecas `org.grox.lib`
+
+As bibliotecas `org.grox.lib` **do mesmo build** de que a app depende, direta ou transitivamente, recarregam como a própria app. É o caso de um `core` com as domains e os services usado por várias apps (o `app-c-core` do app-c):
+
+```groovy
+// app/build.gradle
+dependencies { implementation project(':core') }   // core: plugins { id 'org.grox.lib' }
+```
+
+- O `run` passa os diretórios de classes e resources das bibliotecas junto com os da app (`grox.reload.classes`/`resources`) e os põe no classpath antes dos jars.
+- O Gradle contínuo (`groxReloadStamp`) compila também as bibliotecas.
+- As camadas são as mesmas: service, controller e taglib da biblioteca pedem a recarga leve; domain, `src/main/groovy` e configuração pedem a completa. As classes fixadas também valem entre módulos: um service da biblioteca referenciado por uma classe de `src/main/groovy` (da biblioteca ou da app) fica na camada estável.
+- Ficam de fora, no classloader do sistema: projetos sem o plugin (o próprio framework, bibliotecas Java comuns) e dependências de outros builds (o Grox por composite build, jars publicados). Mudança neles exige reiniciar.
+- **Tempo de compilação:** quando a biblioteca muda, o Gradle recompila a app inteira, porque o classpath dela mudou (no Groovy, sem a *compilation avoidance*, que ainda está em preview no Gradle). No app-c, mudar um service do `app-c-core` leva cerca de 3 minutos: 10 s para o `app-c-core` (incremental), 3 s para o jar, 2 min para o `app-c-web` inteiro e 6 s para a recarga leve.
+
 ## Configuração
 
 | Onde | Chave | Padrão | |
@@ -49,11 +64,15 @@ Um artefato recarregável referenciado por uma classe estável (por exemplo, um 
 
 Sem o wrapper do Gradle, ou com `-Dgrox.reload.compile=false`, a recarga dispara quando os diretórios de classes param de mudar (a IDE compila).
 
+### Fontes fora da raiz do build
+
+O Gradle contínuo só percebe mudanças dentro do diretório raiz do build. No [build paralelo](../migracao/build-paralelo.md), os fontes ficam fora dele (`grox { source('..') }`). Quando algum diretório de fontes da app ou das bibliotecas está fora da raiz, o `run` passa todos eles em `grox.reload.sources`. A app então os observa e roda o Gradle (`groxReloadStamp`) uma vez a cada mudança, em vez de usar o `--continuous`. O log mostra `Gradle sob demanda (fontes fora da raiz do build)`.
+
 ## Limitações
 
 - **Sessão em memória:** instâncias guardadas na sessão continuam sendo da geração antiga. Depois de uma recarga completa, uma domain class na sessão é de outra classe: guarde ids. Com sessão no Redis, o objeto é desserializado com a geração nova.
 - **Context classloader:** código de bibliotecas que carrega classes da app pelo context classloader de threads do Netty vê a cópia do classpath do sistema. Nas actions e views, o context classloader já é o da aplicação.
-- **Projetos grandes:** o tempo vai quase todo na compilação de domain classes. O Gradle recompila tudo que depende da classe alterada (num projeto de 61 domains, cerca de 24 s contra 2 a 3 s de um controller). Não divida a app em módulos para contornar: a recarga só acompanha o módulo da aplicação. Classes de bibliotecas `org.grox.lib` não são recarregadas.
+- **Projetos grandes:** o tempo vai quase todo na compilação de domain classes. O Gradle recompila tudo que depende da classe alterada (num projeto de 61 domains, cerca de 24 s contra 2 a 3 s de um controller). Separar as domains numa biblioteca `org.grox.lib` ainda não ajuda: mudar a biblioteca recompila a app inteira (ver [Bibliotecas](#bibliotecas-orggroxlib)).
 - **JWT:** tokens continuam válidos na recarga leve. Na completa, só se `rest.token.storage.jwt.secret` estiver configurado (sem ele, o segredo é aleatório por geração).
 - **Apps do `grox-dsl`** (sem `grails-app/`) ainda não têm recarga de classes.
 

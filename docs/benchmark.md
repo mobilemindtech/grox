@@ -75,7 +75,7 @@ bench/run-livros.sh grails; bench/run-livros.sh grox; bench/run-livros.sh plain
 - **Com 1 conexão, o Grails é mais rápido em texto** (0,21 contra 0,29 a 0,36 ms) e empata com o puro em JSON. Cada requisição no Grox passa por pelo menos dois saltos de thread (event loop do Netty, virtual thread ou ator, event loop de novo), e no compat também pelo ator do controller. Na GSP, onde a renderização pesa mais que o despacho, o Grox é de 1,5× a 2× mais rápido também com 1 conexão.
 - **Grox puro x compat:** de 5% a 50% a mais, conforme a rota. O caminho Grails tem interceptors, `WebRequest`, binding dos argumentos da action e negociação de formato no `respond`.
 - **Subida:** o Grox sobe em menos da metade do tempo. Os dois sobem o Hibernate; o Grails também sobe o contexto do Spring, o Undertow e o Spring Security.
-- **Memória:** RSS de 1,2 a 1,6 GB nas três no fim da rodada, com o heap padrão da JVM (1/4 da RAM); não é uma comparação de memória.
+- **Memória:** RSS de 1,2 a 1,6 GB nas três no fim da rodada, com o heap padrão da JVM (1/4 da RAM); não é uma comparação de memória (ver a seção seguinte).
 - **A máquina estava ocupada:** o load average foi de 5 a 27 durante a rodada. Valem as razões entre versões vizinhas, não os números absolutos.
 
 ### O que a rodada mostrou e foi corrigido
@@ -100,6 +100,36 @@ A/B alternado do `sample-plain` (A, C, C, A): texto de 12.834 e 16.430 para 23.1
 - **Caminho dos controllers em `@CompileStatic`** (`ControllerExecutor`, `WebRequest`, `ActionMethod`, `ActorPool.submit`, `Metrics.end`, `Management.handles`, `Conversions.isSimple`, auxiliares do `HttpPipeline`). A/B alternado do `bench/livros` (A, B, B, A) com 1 conexão: texto de 0,35 e 0,36 para 0,31 ms; JSON de 0,49 e 0,57 para 0,39 e 0,46 ms; GSP de 0,85 e 0,86 para 0,76 e 0,80 ms. Com 64 conexões, texto cerca de +15%, o resto dentro do ruído. O salto para o ator do controller continua: é o modelo de concorrência.
 - **"Requisições simultâneas na mesma sessão" era artefato de medição.** Uma rodada mostrou a GSP com 64 conexões e o mesmo cookie em cerca de 1.300 req/s, contra cerca de 5.700 sem cookie. O perfil JFR dos dois casos tem o mesmo custo por método, sem disputa de trava: o caso com cookie rodava sempre primeiro, com o JIT ainda frio. Alternando os dois na mesma JVM, depois de 50 s de aquecimento: 5.773, 5.983 e 5.777 req/s com cookie; 4.923, 6.399 e 6.723 sem.
 - **Aquecimento da GSP:** a página só chega a cerca de 6.000 req/s depois de quase 1 minuto de carga; com os 20 s do `run-livros.sh`, os números da GSP saem mais baixos e mais instáveis (por isso o intervalo largo nas tabelas). Para comparar GSPs, use `WARM=60`.
+
+## Memória: Grails x Grox (2026-10-31)
+
+A mesma app de livros da seção anterior, com o heap fixo (`-Xmx`), NMT ligado e 15 s de carga com 64 conexões na `/livros` (GSP) e depois na `/api/livros/7` (JSON). "Heap vivo" é o usado logo depois de um GC completo (`jcmd GC.run`). A máquina estava ocupada (load de 4 a 10), então os req/s não valem aqui.
+
+```bash
+bench/run-mem.sh grails 512m 15; bench/run-mem.sh grox 512m 15; bench/run-mem.sh plain 512m 15
+EXTRA=-Dgrails.plugin.springsecurity.csrf.enabled=false bench/run-mem.sh grox 64m 15
+```
+
+| Com `-Xmx512m` | Grails 8 | Grox compat | Grox puro |
+|---|---:|---:|---:|
+| Heap vivo, parada | 101 MB | 76 MB | 74 MB |
+| Heap vivo, depois da carga | 110 MB | 89 MB | 93 MB |
+| Classes carregadas | 22.356 → 23.387 | 16.140 → 17.520 | 16.406 → 18.292 |
+| Metaspace (NMT, committed) | 93 MB | 70 MB | — |
+| Threads na carga | 113 | 58 | 57 |
+| RSS, parada → carga | 639 → 732 MB | 470 → 675 MB | 478 → 643 MB |
+
+| Menor heap | Grails 8 | Grox compat |
+|---|---|---|
+| Não sobe | 64 MB (OOM na inicialização do contexto do Spring) | 40 MB |
+| Sobe, mas não aguenta a carga na GSP | 80 MB (17 req/s, p50 de 3,8 s) | 48 a 56 MB (OOM) |
+| Aguenta a carga, sem erros | 96 MB | 64 MB (RSS de 326 → 516 MB) |
+
+- **O Grox precisa de cerca de 2/3 da memória do Grails** na mesma app: heap vivo de 25 a 30% menor, um terço a menos de classes e de metaspace, metade das threads (o Undertow tem um pool de workers; o Grox usa o event loop e virtual threads). O heap mínimo que aguenta a carga caiu de 96 para 64 MB.
+- **O que ocupa o heap** (histograma de classes depois de subir, `-Xmx256m`: Grails 104 MB, Grox 80 MB): nos dois, os maiores são as metaclasses do Groovy (`MetaMethodIndex$Cache`, `CachedMethod`, `java.lang.reflect.Method`), não o Hibernate. Com menos classes carregadas, o Grox cria menos metaclasses. Esse é o próximo alvo, se a memória importar: menos chamadas dinâmicas nas classes do framework, e `@CompileStatic` onde não há dinamismo.
+- **RSS:** com heap pequeno, o RSS fica de 300 a 520 MB nos dois, dominado por metaspace, code cache do JIT, GC e arenas nativas, e não pelo heap. Para conter o RSS num contêiner, limite também `-XX:MaxMetaspaceSize` e `-XX:ReservedCodeCacheSize`, e use `-XX:+UseSerialGC` em instâncias pequenas.
+- **Sessões do CSRF:** no Grox, cada GET anônimo da `/livros` cria uma sessão (o token do `<g:form>`), e o gerador de carga não devolve o cookie; com 48 MB e CSRF desligado ainda houve OOM, então não é isso que define o mínimo nesta app. Num robô de verdade, o peso das sessões vale a pena acompanhar (ver acima).
+- **Apps reais:** o app A e o app C carregam muito mais classes (o app-c-core sozinho tem milhares), e não foram medidos: a diferença acima vem da pilha (Spring, Undertow, Spring Security, GORM), que é a mesma, mas as classes da app pesam mais. Para medir, use o `grox/` do build paralelo e o `bootJar` do Grails com o mesmo `-Xmx`.
 
 ## Grails compat x grox-dsl (2026-10-09)
 

@@ -60,13 +60,27 @@ class Passwords {
         '{bcrypt}' + BCrypt.withDefaults().hashToString(cost, raw.toCharArray())
     }
 
-    /** Já está no formato de senha codificada (não codificar de novo). */
+    /** Tamanho do hash em hex e em base64, por algoritmo de digest. */
+    private static final Map<String, List<Integer>> HASH_LENGTHS = ['MD5': [32, 24], 'SHA-1': [40, 28], 'SHA-256': [64, 44], 'SHA-512': [128, 88]]
+
+    /**
+     * Já é um hash (bcrypt, ou digest com o tamanho certo): não codificar de novo. {@code {noop}texto} e prefixos
+     * seguidos de qualquer coisa não contam, porque o valor pode vir do usuário: com eles, uma senha como
+     * {@code {noop}segredo} seria gravada em texto puro. Para gravar, prefira codificar sempre que a senha mudar.
+     */
     static boolean isEncoded(String value) {
         if (value == null) return false
         if (value ==~ /^(\{bcrypt\})?\$2[aby]\$\d\d\$.{53}$/) return true
-        if (value.startsWith('{noop}')) return true
         String id = prefixId(value)
-        id != null && id in DIGESTS
+        if (id == null || !(id in DIGESTS)) return false
+        String hash = value.substring(id.length() + 2)
+        if (hash.startsWith('{')) {
+            int end = hash.indexOf('}')
+            if (end < 0) return false
+            hash = hash.substring(end + 1)   // {SHA-256}{sal}hash
+        }
+        List<Integer> sizes = HASH_LENGTHS[id]
+        (hash.length() == sizes[0] && hash ==~ /[0-9a-f]+/) || (hash.length() == sizes[1] && hash ==~ /[A-Za-z0-9+\/]+=*/)
     }
 
     static boolean matches(String raw, String encoded) {

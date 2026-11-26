@@ -52,6 +52,14 @@ class HardeningTest {
         assert !direto.fromTrustedProxy && direto.scheme == 'http' && direto.serverName == 'app.local' && direto.clientAddr == '198.51.100.7'
         assert direto.requestURL.toString() == 'http://app.local:8080/x'
         assert req('/0:0:0:0:0:0:0:1:5555').clientAddr == '203.0.113.9'   // IPv6 loopback é confiável
+        // o cliente manda um X-Forwarded-For forjado e o proxy acrescenta o endereço real à direita
+        def forjado = new GroxRequest(method: 'GET', path: '/x', uri: '/x', remoteAddr: '/10.0.0.2:4321')
+        forjado.headers.add('X-Forwarded-For', '1.2.3.4, 203.0.113.9, 10.0.0.3')
+        assert forjado.clientAddr == '203.0.113.9'
+        // só proxies confiáveis na lista: vale o mais à esquerda
+        def interno = new GroxRequest(method: 'GET', path: '/x', uri: '/x', remoteAddr: '/10.0.0.2:4321')
+        interno.headers.add('X-Forwarded-For', '192.168.0.5, 10.0.0.3')
+        assert interno.clientAddr == '192.168.0.5'
     }
 
     @Test

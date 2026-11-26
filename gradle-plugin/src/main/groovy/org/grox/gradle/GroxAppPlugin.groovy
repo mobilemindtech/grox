@@ -27,6 +27,8 @@ import org.gradle.api.tasks.SourceSet
  *   <li>{@code run} com JIT só C1 ({@code grox.fastDevStartup}), para subir mais rápido</li>
  *   <li>{@code run} com recarga de classes ({@code grox.reload}): diretórios de saída e o Gradle contínuo
  *       que os atualiza, passados à app por propriedades {@code grox.reload.*}</li>
+ *   <li>raízes de código externas e patches ({@code grox { source; patches }}, ver {@link GroxSources}): o build
+ *       paralelo dentro do repositório de uma app Grails</li>
  *   <li>{@code aotCache}: execução de treino sobre o {@code installDist} que gera o AOT cache do JDK
  *       ({@code lib/grox.aot}); o script de start o usa quando existe</li>
  * </ul>
@@ -56,9 +58,16 @@ class GroxAppPlugin implements Plugin<Project> {
             t.outputs.upToDateWhen { false }
             t.doLast(new WriteStamp(stamp))
         }
-        def reloadArgs = new ReloadArgs(ext.reload, main.output.classesDirs, project.files(main.output.resourcesDir),
-                gradlew.file ? gradlew : null, "${prefix}:groxReloadStamp".toString(), stamp)
+        // bibliotecas org.grox.lib do mesmo build (diretas ou transitivas): também recarregam, e o run usa os
+        // diretórios de saída delas no lugar dos jars (que o Gradle contínuo reescreve; ver ReloadLibs)
+        def libs = ReloadLibs.register(project)
+        project.tasks.named('groxReloadStamp').configure { it.dependsOn(libs.outputs) }
+        def reloadArgs = new ReloadArgs(ext.reload, project.files(main.output.classesDirs, libs.classes),
+                project.files(main.output.resourcesDir, libs.resources),
+                gradlew.file ? gradlew : null, "${prefix}:groxReloadStamp".toString(), stamp,
+                project.files(main.allSource.sourceDirectories, libs.sources), project.rootDir)
         project.tasks.named('run', JavaExec).configure { JavaExec t ->
+            t.classpath = project.files(main.output, libs.outputs, libs.runtimeWithoutLibs(project))
             t.workingDir = project.projectDir
             // sem GRAILS_ENV o padrão do framework é production (artefato); o run é development, como o bootRun
             t.systemProperty('grox.env.default', 'development')
@@ -98,7 +107,11 @@ fi''')
         }
 
         def gspOutput = project.layout.buildDirectory.dir('gsp-classes')
-        Provider<Directory> viewsDir = GroxLayout.dir(project, ext, 'views')
+        // com raízes externas (grox { source }), as views vêm de várias raízes: compila as já reunidas pelo processResources
+        Provider<Directory> projectViews = GroxLayout.dir(project, ext, 'views')
+        File mergedViews = new File(main.output.resourcesDir, 'views')
+        Provider<Directory> viewsDir = project.layout.dir(project.provider {
+            GroxSources.external(ext) ? mergedViews : projectViews.get().asFile })
         def compileGsp = project.tasks.register('compileGsp', JavaExec) { JavaExec t ->
             t.group = 'build'
             t.description = 'Pré-compila as GSPs de grails-app/views (ou do appDir)'
@@ -106,7 +119,8 @@ fi''')
             // não 'classes': a saída de compileGsp faz parte de classes (main.output.dir)
             t.dependsOn('compileGroovy', 'processResources')
             // fileTree: apps sem views (jobs, API) não têm o diretório
-            t.inputs.files(GroxLayout.tree(project, ext, 'views')).withPropertyName('views')
+            t.inputs.files(project.provider { GroxSources.external(ext) ? project.fileTree(mergedViews) : GroxLayout.tree(project, ext, 'views') })
+                    .withPropertyName('views')
             t.inputs.files(main.output.classesDirs).withPropertyName('classes')
             t.outputs.dir(gspOutput)
             t.mainClass.set('org.grox.view.gsp.GspPrecompiler')
@@ -118,19 +132,39 @@ fi''')
         main.output.dir([builtBy: compileGsp], gspOutput)
 
         def assetOutput = project.layout.buildDirectory.dir('assets')
-        Provider<Directory> assetsDir = GroxLayout.dir(project, ext, 'assets')
+        // assets não se mesclam: vêm do projeto ou da última raiz externa que os tem
+        Provider<Directory> projectAssets = GroxLayout.dir(project, ext, 'assets')
+        Provider<Directory> assetsDir = project.layout.dir(project.provider {
+            File own = projectAssets.get().asFile
+            if (own.directory || !ext.sources) return own
+            ext.sources.collect { new File(project.file(it.dir), "${ext.appDir.get()}/assets") }.reverse().find { it.directory } ?: own
+        })
         def assetCompile = project.tasks.register('assetCompile', JavaExec) { JavaExec t ->
             t.group = 'build'
             t.description = 'Compila grails-app/assets (ou do appDir): diretivas require, digest e manifest'
             t.onlyIf { assetsDir.get().asFile.directory }
             t.dependsOn('compileGroovy', 'processResources')
-            t.inputs.files(GroxLayout.tree(project, ext, 'assets')).withPropertyName('assets')
+            t.inputs.files(project.provider { project.fileTree(assetsDir) }).withPropertyName('assets')
             t.outputs.dir(assetOutput)
             t.mainClass.set('org.grox.assets.AssetCompiler')
             t.classpath = project.files(main.output.classesDirs, main.output.resourcesDir) + project.configurations.getByName('runtimeClasspath')
             t.argumentProviders.add(new AssetArgs(assetsDir, assetOutput))
         }
         main.output.dir([builtBy: assetCompile], assetOutput)
+        // em development os assets são servidos do diretório (relativo ao run); de uma raiz externa, pelo caminho
+        def devAssets = project.provider { GroxSources.external(ext) ? assetsDir.get().asFile.absolutePath : '' }
+        project.tasks.named('run', JavaExec).configure { JavaExec t -> t.jvmArgumentProviders.add(new DevAssetsArgs(devAssets)) }
+    }
+
+    static class DevAssetsArgs implements CommandLineArgumentProvider, Serializable {
+        private final Provider<String> dir
+
+        DevAssetsArgs(Provider<String> dir) { this.dir = dir }
+
+        @Override
+        Iterable<String> asArguments() {
+            dir.get() ? ["-Dgrox.assets.dir=${dir.get()}".toString()] : []
+        }
     }
 
     static class FastStartupArgs implements CommandLineArgumentProvider, Serializable {
@@ -152,15 +186,19 @@ fi''')
         private final File gradlew
         private final String tasks
         private final Provider<RegularFile> stamp
+        private final FileCollection sources
+        private final File rootDir
 
         ReloadArgs(Provider<Boolean> enabled, FileCollection classes, FileCollection resources, File gradlew, String tasks,
-                   Provider<RegularFile> stamp) {
+                   Provider<RegularFile> stamp, FileCollection sources, File rootDir) {
             this.enabled = enabled
             this.classes = classes
             this.resources = resources
             this.gradlew = gradlew
             this.tasks = tasks
             this.stamp = stamp
+            this.sources = sources
+            this.rootDir = rootDir
         }
 
         @Override
@@ -170,6 +208,13 @@ fi''')
                                  "-Dgrox.reload.resources=${resources.files*.absolutePath.join(File.pathSeparator)}".toString()]
             if (gradlew) args += ["-Dgrox.reload.gradlew=${gradlew.absolutePath}".toString(), "-Dgrox.reload.tasks=${tasks}".toString(),
                                   "-Dgrox.reload.stamp=${stamp.get().asFile.absolutePath}".toString()]
+            // o Gradle contínuo não vê mudanças fora da raiz do build (raízes externas do build paralelo): nesse caso a
+            // app observa os fontes e roda o Gradle a cada mudança
+            List<File> dirs = sources.files.findAll { it.directory }.toList()
+            String root = rootDir.canonicalPath + File.separator
+            if (gradlew && dirs.any { !(it.canonicalPath + File.separator).startsWith(root) }) {
+                args << "-Dgrox.reload.sources=${dirs*.absolutePath.join(File.pathSeparator)}".toString()
+            }
             args
         }
     }

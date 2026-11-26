@@ -56,6 +56,8 @@ class GroxLayout {
             t.outputDir.set(indexOutput)
         }
         main.output.dir([builtBy: index], indexOutput)
+        // raízes externas e patches (build paralelo dentro do repositório de uma app Grails)
+        GroxSources.apply(project, ext, main)
         main
     }
 

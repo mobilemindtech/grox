@@ -31,6 +31,22 @@ grox { precompileGsp = true }                            // padrão
 
 **Nome do diretório** *(extensão Grox)*: em vez de `grails-app/`, o projeto pode usar `grox-app/`, que é detectado sem configuração, ou qualquer outro nome com `grox { appDir = 'app' }` (vale para os plugins `org.grox.app` e `org.grox.lib`). O plugin passa o nome (`-Dgrox.appDir`) à compilação, para a AST reconhecer os artefatos, ao `run` (views e assets com reload) e aos testes. Fora do Gradle, a chave `grox.appDir` faz o mesmo. O `sample-lib/` usa `grox-app/`.
 
+**Build paralelo: código de outro diretório** *(extensão Grox)*: `grox { source(dir) }` compila também o `grails-app/` e o `src/main/` de outro diretório, sem copiá-lo. É assim que uma app Grails ganha, no próprio repositório, um segundo build (num subdiretório `grox/` que o build do Grails ignora) que compila o mesmo código sobre o Grox. Os padrões de cada raiz são relativos a ela; um arquivo de mesmo caminho numa raiz declarada depois (e aceito pelos padrões dela), ou no próprio projeto, substitui o da raiz (é onde ficam os overrides, como um `BootStrap` só do Grox). `patches` lista diffs unificados (`--- a/grails-app/services/X.groovy`) aplicados com `patch -p1` a cópias em `build/grox-patched` (tarefa `groxPatch`): o original não muda, e um patch que não se aplica mais falha o build com a saída do `patch`. Com raízes externas, o `compileGsp` compila as views já reunidas pelo `processResources`, os assets vêm do projeto ou da última raiz que os tem, e o `run` serve os assets do diretório original (`-Dgrox.assets.dir`).
+
+```groovy
+// app-c/grox/app-c-web/build.gradle
+plugins { id 'org.grox.app' }
+grox {
+    source('../../app-c-web') {
+        exclude 'src/main/java/br/com/empresa/app C/aot/**', 'grails-app/conf/logback-spring.xml'
+    }
+    source('../../app C-taglibs') { include 'grails-app/taglib/**', 'src/main/groovy/**' }
+    patches.from('patches')        // *.patch do diretório
+}
+```
+
+O roteiro completo (settings com o Grox por composite build, `gradlew` que delega ao do Grox, configuração no perfil `grox`) está em [app C-build-paralelo.md](app C-build-paralelo.md) e no livro (Trilha 1, "Build paralelo").
+
 O plugin aplica `groovy` e `application` e faz o seguinte:
 - mapeia `grails-app/{controllers,services,domain,init,taglib,jobs,utils}` como fontes;
 - mapeia `grails-app/conf` e `grails-app/i18n` como resources, e `grails-app/views` como `views/` no classpath;
@@ -467,7 +483,7 @@ grails:
 
 ### Regras de acesso
 
-1. `@Secured` da **action**, depois `@Secured` do **controller**. Por exemplo `@Secured('ROLE_ADMIN')` ou `@Secured(value = ['ROLE_A', 'ROLE_B'], httpMethod = 'POST')`.
+1. `@Secured` da **action**, depois `@Secured` do **controller**. Por exemplo `@Secured('ROLE_ADMIN')` ou `@Secured(value = ['ROLE_A', 'ROLE_B'], httpMethod = 'POST')`. O `@Secured` da action com `httpMethod` só vale para esse método; nos outros, vale o do controller. Com `<g:actionSubmit>` (`_action_X`), as regras são as da action que vai rodar. O `@Secured` da action com `httpMethod` só vale para esse método; nos outros, vale o do controller. Com `<g:actionSubmit>` (`_action_X`), as regras são as da action que vai rodar.
 2. Senão, a **primeira** regra de `interceptUrlMap` que casar com o caminho e o método; depois as de `controllerAnnotations.staticRules` (lista de `[pattern:, access:, httpMethod:]` ou o mapa `'/caminho': ['regra']`, como o `s2-quickstart` gera no `application.groovy`).
 3. Senão, `rejectIfNoRule`.
 
@@ -545,8 +561,8 @@ class User {
     static constraints = { username blank: false, unique: true; password blank: false; tenantId nullable: true }
     Set<Role> getAuthorities() { UserRole.findAllByUser(this)*.role as Set }
     def beforeInsert() { encodePassword() }
-    def beforeUpdate() { encodePassword() }
-    protected void encodePassword() { if (!Passwords.isEncoded(password)) password = Passwords.encode(password) }
+    def beforeUpdate() { if (isDirty('password')) encodePassword() }
+    protected void encodePassword() { password = Passwords.encode(password) }
 }
 class Role { String authority }
 class UserRole { User user; Role role }
@@ -1006,6 +1022,7 @@ class UrlMappings {
 
 - `resources: 'livro'` gera: `GET /livros` (index), `GET /livros/create`, `POST /livros` (save), `GET /livros/$id` (show), `GET /livros/$id/edit`, `PUT /livros/$id` (update), `PATCH /livros/$id` (patch), `DELETE /livros/$id` (delete). Todas aceitam `.json`.
 - Mapeamentos mais específicos (mais texto literal) têm prioridade.
+- Verbo errado: `405` só se algum mapeamento de outro verbo levaria a um controller e action existentes; senão, `404`. Com os mapeamentos REST genéricos do perfil rest-api (`delete "/$controller/$id(.$format)?"`, `get "/$controller(.$format)?"`...), um `GET /nao-existe` dá `404`, como no Grails.
 - Sem nenhuma classe `UrlMappings`, vale só o mapeamento padrão `/$controller/$action?/$id?(.$format)?`.
 - Formulários podem simular PUT/PATCH/DELETE com o campo `_method` (o `<g:form method="PUT">` já gera) ou com o cabeçalho `X-HTTP-Method-Override`.
 - `createLink` e `redirect` geram URLs a partir destes mapeamentos. Um mapeamento que fixa parâmetros (como `format: 'json'`) só é usado se o link pedir o mesmo valor.
@@ -1171,12 +1188,14 @@ Como funciona:
 - `messages*.properties` e `resources.groovy` pedem recarga leve; `application.yml` pede a completa.
 - Um artefato recarregável que é referenciado por uma classe estável (por exemplo, um service usado como tipo em `src/main/groovy`) fica fixado na camada estável e só recarrega na completa. O log avisa quando isso acontece.
 - Se a recarga completa falhar (erro no BootStrap, mapeamento inválido), as requisições recebem 503 com o erro até a próxima mudança corrigir.
+- **Bibliotecas `org.grox.lib` do mesmo build** (diretas ou transitivas, como o `app-c-core` do app-c) recarregam como a app: o plugin passa os diretórios de classes e resources delas em `grox.reload.classes`/`resources`, põe a saída delas no classpath do `run` antes dos jars e faz o `groxReloadStamp` compilá-las. As camadas e a fixação valem entre módulos (um service da biblioteca referenciado pelo `src/main/groovy` dela fica estável). Projetos sem o plugin (o framework, bibliotecas Java) e dependências de outros builds continuam no classloader do sistema e exigem reiniciar.
+- **Fontes fora da raiz do build** (raízes externas do build paralelo, `grox { source('..') }`): o Gradle contínuo não vê mudanças fora do diretório raiz do build. Nesse caso o plugin passa `grox.reload.sources` com todos os diretórios de fontes da app e das bibliotecas, e o `DevReloader` os observa e roda `groxReloadStamp` uma vez por mudança (log: `Gradle sob demanda`). O classpath do `run` não leva os jars das bibliotecas (só os diretórios), porque o `compileGroovy` da app consome esses jars e o Gradle os reescreveria com a JVM rodando.
 - Sem o wrapper do Gradle, ou com `-Dgrox.reload.compile=false`, a compilação fica por conta da IDE. Nesse caso a recarga dispara quando os diretórios de classes param de mudar.
 
 Limitações:
 - Instâncias guardadas na sessão em memória continuam sendo da geração antiga. Depois de uma recarga completa, uma domain class na sessão é de outra classe (use ids na sessão). Com sessão no Redis, o objeto é desserializado com a geração nova.
 - Código de bibliotecas que carrega classes da app pelo *context classloader* de threads do Netty vê a cópia do classpath do sistema.
-- Em projetos grandes, o tempo vai quase todo na compilação de domain classes. O Gradle recompila tudo que depende da classe alterada (no app A, ~24 s contra 2–3 s de um controller). Não divida a app em módulos para contornar isso: a recarga só acompanha o módulo da aplicação. O módulo de domains está no [roadmap](roadmap.md#depois-sem-prioridade-definida).
+- Em projetos grandes, o tempo vai quase todo na compilação de domain classes. O Gradle recompila tudo que depende da classe alterada (no app A, ~24 s contra 2–3 s de um controller). Separar as domains numa biblioteca ainda não reduz isso: mudar a biblioteca recompila a app inteira, até a *compilation avoidance* do Groovy ser ligada (ver [roadmap](roadmap.md#depois-sem-prioridade-definida)).
 - Tokens JWT continuam válidos na recarga leve. Na completa, só continuam se o segredo estiver configurado (sem ele, o segredo é aleatório por geração).
 
 A troca de métodos na mesma JVM, com HotSwap/DCEVM e sem nova geração, está registrada como melhoria futura no [roadmap](roadmap.md#depois-sem-prioridade-definida).
@@ -1410,6 +1429,8 @@ spring:
     import: classpath:app-shared.yml,classpath:app-rabbitmq.groovy
 ```
 
+**Perfil `grox` (`application-grox.yml`, `application-grox.groovy`)** *(extensão Grox)*: arquivos opcionais mesclados por último, acima do `application.groovy`, do `runtime.groovy` e dos importados (só propriedades de sistema e variáveis de ambiente vencem). Têm `environments` e `spring.config.import` como os outros. O nome segue o arquivo de perfil do Spring Boot, e o Grails nunca ativa o perfil `grox`: é onde o build paralelo de uma app Grails guarda os ajustes do Grox (CSRF desligado, `dbCreate`, sessão), sem mudar a configuração do projeto. Testes em `ConfigTest`.
+
 A sobreposição por variável de ambiente vale só para valores. Um bloco do YAML (ex.: `mail:`) nunca é escondido por uma variável homônima (ex.: `MAIL` do shell).
 
 Valores podem usar placeholders, resolvidos na carga: `${NOME}` ou `${NOME:padrão}`. `NOME` é procurado como propriedade de sistema, variável de ambiente ou outra chave do próprio YAML:
@@ -1439,7 +1460,7 @@ Na aplicação: `grailsApplication.config.getProperty('api.base')`, `config.getP
 | `grox.http.idleTimeout` | `60` | Segundos sem tráfego até fechar uma conexão keep-alive sem resposta pendente. `0` desliga |
 | `grox.http.maxConnections` | `10000` | Conexões simultâneas; as excedentes são fechadas. `0` sem limite |
 | `grox.http.maxPipelined` | `16` | Requisições em voo por conexão (HTTP pipelining) antes de pausar a leitura |
-| `grox.http.trustedProxies` | loopback e redes privadas | Regex dos endereços cujos `X-Forwarded-For/Proto/Host` são aceitos, como o `internalProxies` do Tomcat. Vazio: nenhum |
+| `grox.http.trustedProxies` | loopback e redes privadas | Regex dos endereços cujos `X-Forwarded-For/Proto/Host` são aceitos, como o `internalProxies` do Tomcat. O cliente é o primeiro endereço do `X-Forwarded-For` que não é proxy confiável, da direita para a esquerda. Vazio: nenhum |
 | `grox.http.securityHeaders` | `nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: strict-origin-when-cross-origin` | Acrescentados às respostas que não os definem. Um mapa troca ou acrescenta (ex.: `Strict-Transport-Security`); valor vazio remove um; `false` desliga |
 | `grox.session.cookie.secure` | `auto` | `Secure` no cookie de sessão: `auto` (em HTTPS), `true` ou `false` |
 | `grox.session.serialization.allow` | | Pacotes extras aceitos na leitura da sessão do Redis |
@@ -1453,6 +1474,7 @@ Na aplicação: `grailsApplication.config.getProperty('api.base')`, `config.getP
 | `grox.reload.enabled` | `true` | Recarga de classes no `run` em development (ver [Recarga](#recarga-de-classes-em-desenvolvimento)). Também `-Dgrox.reload.enabled=false` |
 | `-Dgrox.reload.compile` | `true` | `false`: não inicia o Gradle contínuo (a IDE compila) |
 | `-Dgrox.reload.interval` | `500` | Intervalo do monitoramento, em ms |
+| `-Dgrox.reload.sources` | | Passado pelo plugin quando há fontes fora da raiz do build: diretórios observados para rodar o Gradle sob demanda |
 | `grox.static.prefix` | `/static` | |
 | `grox.static.dir` | `src/main/resources/public` | |
 | `grails.serverURL` | | Base para links com `absolute: true` |

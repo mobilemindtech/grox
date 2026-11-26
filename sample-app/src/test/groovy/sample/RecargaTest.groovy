@@ -11,6 +11,9 @@ import org.junit.jupiter.api.Order
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestMethodOrder
 
+import extra.NotaService
+
+import java.nio.file.FileSystems
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
@@ -18,12 +21,14 @@ import java.nio.file.Paths
 /**
  * Recarga em desenvolvimento com o DevReloader de verdade, sobre uma cópia das classes, views e assets
  * (os fontes do sample-app não são tocados). Cada teste recompila uma classe e chama {@code reload()}.
+ * As classes do sample-lib (biblioteca org.grox.lib) ficam num segundo diretório, como o plugin passa.
  */
 @TestMethodOrder(MethodOrderer.OrderAnnotation)
 class RecargaTest {
 
     static Path tmp
     static Path classes
+    static Path libClasses
     static DevReloader reloader
     static TestClient client
     static String basic = 'Basic ' + 'maria:maria'.bytes.encodeBase64()
@@ -33,6 +38,8 @@ class RecargaTest {
         tmp = Files.createTempDirectory('grox-recarga')
         classes = tmp.resolve('classes')
         copy(Paths.get(Application.protectionDomain.codeSource.location.toURI()), classes)
+        libClasses = tmp.resolve('lib-classes')
+        copyClasses(Paths.get(NotaService.protectionDomain.codeSource.location.toURI()), libClasses)
         copy(Paths.get('grails-app/views'), tmp.resolve('views'))
         copy(Paths.get('grails-app/assets'), tmp.resolve('assets'))
         System.setProperty('grails.env', 'development')
@@ -40,7 +47,7 @@ class RecargaTest {
         System.setProperty('grox.gsp.viewsDir', tmp.resolve('views').toString())
         System.setProperty('grox.assets.dir', tmp.resolve('assets').toString())
         // intervalo longo: o teste chama reload() diretamente
-        reloader = new DevReloader(Application.name, new String[0], [classes], [], 3_600_000L)
+        reloader = new DevReloader(Application.name, new String[0], [classes, libClasses], [], 3_600_000L)
         GroxRuntime app = reloader.start()
         client = new TestClient("http://localhost:${app.port}")
     }
@@ -62,8 +69,17 @@ class RecargaTest {
         }
     }
 
+    /** Classes de um diretório ou de um jar (o teste vê o sample-lib empacotado). */
+    static void copyClasses(Path location, Path to) {
+        if (Files.isDirectory(location)) {
+            copy(location, to)
+            return
+        }
+        FileSystems.newFileSystem(location).withCloseable { fs -> copy(fs.getPath('/'), to) }
+    }
+
     /** Recompila um fonte do sample-app (com trocas de texto) para a cópia das classes, como o Gradle faria. */
-    static void recompile(String source, Map<String, String> replacements) {
+    static void recompile(String source, Map<String, String> replacements, Path target = classes) {
         String code = new File(source).getText('UTF-8')
         replacements.each { String a, String b ->
             assert code.contains(a)
@@ -72,7 +88,7 @@ class RecargaTest {
         Path file = tmp.resolve('src').resolve(source)
         Files.createDirectories(file.parent)
         file.toFile().setText(code, 'UTF-8')
-        def config = new CompilerConfiguration(targetDirectory: classes.toFile())
+        def config = new CompilerConfiguration(targetDirectory: target.toFile())
         def unit = new CompilationUnit(config, null, new GroovyClassLoader(RecargaTest.classLoader, config))
         unit.addSource(file.toFile())
         unit.compile()
@@ -156,5 +172,47 @@ class RecargaTest {
         assert ola() == 'Oi, Ana!'
         assert visitas() == 4
         assert !tarefas().contains('descricao')
+    }
+
+    /** Classloader da classe {@code name} na hierarquia do objeto (services com @Transactional vêm num proxy). */
+    static String loaderName(Object o, String name) {
+        Class<?> c = o.getClass()
+        while (c != null && c.name != name) c = c.superclass
+        assert c != null
+        c.classLoader.name
+    }
+
+    static String nota(String texto) {
+        def r = client.send('GET', "/home/nota?texto=${texto}")
+        assert r.status() == 200
+        r.body()
+    }
+
+    @Test
+    @Order(5)
+    void 'taglib de uma biblioteca grox-lib recarrega como a da aplicacao'() {
+        assert nota('a') ==~ /\d+ nota\(s\)\|.*/
+        GroxRuntime atual = reloader.current
+        // NotaService fica na camada estável: o FormatadorNota (src/main/groovy da biblioteca) o referencia
+        assert loaderName(atual.services.beans.notaService, 'extra.NotaService').startsWith('grox-stable-')
+        recompile('../sample-lib/grox-app/taglib/extra/NotaTagLib.groovy', ["out << g.message(": "out << '#' << g.message("], libClasses)
+        reloader.reload()
+        assert !reloader.current.is(atual)
+        assert reloader.current.datastore.is(atual.datastore)   // leve: Hibernate e dados continuam
+        assert nota('b') ==~ /#\d+ nota\(s\)\|.*/
+    }
+
+    @Test
+    @Order(6)
+    void 'domain de uma biblioteca muda: recarga completa'() {
+        GroxRuntime antes = reloader.current
+        recompile('../sample-lib/grox-app/domain/extra/Nota.groovy', ['    String texto': '    String texto\n    String autor',
+                                                                 'texto blank: false': 'texto blank: false\n        autor nullable: true'], libClasses)
+        reloader.reload()
+        assert !reloader.current.datastore.is(antes.datastore)
+        assert reloader.current.server.is(antes.server)
+        def nota = reloader.current.services.beans.notaService.anotar('c')
+        assert nota.hasProperty('autor')
+        assert loaderName(nota, 'extra.Nota').startsWith('grox-stable-')
     }
 }

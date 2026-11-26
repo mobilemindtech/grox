@@ -154,6 +154,9 @@ class SegurancaTest {
         def admin = client().loggedIn('admin', 'admin')
         assert admin.page('/home/painel').body() == 'Painel de admin'
         assert client().page('/home/painel').status() == 302
+        // <g:actionSubmit>: _action_painel numa URL permitAll roda o painel, então vale o @Secured do painel
+        assert maria.form('/home/olaParams', [nome: 'x', _action_painel: 'x']).status() == 403
+        assert admin.form('/home/olaParams', [nome: 'x', _action_painel: 'x']).body() == 'Painel de admin'
         // URL sem regra específica cai no '/**' (isAuthenticated())
         assert client().page('/nao/existe').status() == 302
         assert admin.page('/nao/existe').status() == 404

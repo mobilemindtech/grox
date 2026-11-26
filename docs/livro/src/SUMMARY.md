@@ -13,6 +13,7 @@
 
 - [Visão geral da migração](migracao/visao-geral.md)
 - [Passo a passo](migracao/passo-a-passo.md)
+- [Build paralelo no repositório Grails](migracao/build-paralelo.md)
 - [O que muda em relação ao Grails](migracao/diferencas.md)
 - [Plugins do Grails](migracao/plugins.md)
 - [Armadilhas da migração](migracao/armadilhas.md)

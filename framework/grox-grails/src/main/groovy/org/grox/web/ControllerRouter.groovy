@@ -31,7 +31,13 @@ class ControllerRouter implements Router, AutoCloseable {
 
     @Override
     RouteMatch match(GroxRequest req) {
-        ctx.urlMappings.match(req.path, req.method, ctx.controllers)
+        RouteMatch m = ctx.urlMappings.match(req.path, req.method, ctx.controllers)
+        // <g:actionSubmit>: a action efetiva sai aqui, antes da segurança, para o @Secured avaliar a que vai rodar
+        if (m != null && !m.redirect && !m.view && m.controller instanceof ControllerArtefact) {
+            String submitted = actionSubmitted(req, (ControllerArtefact) m.controller)
+            if (submitted != null) m.actionName = submitted
+        }
+        m
     }
 
     @Override
@@ -43,7 +49,7 @@ class ControllerRouter implements Router, AutoCloseable {
         }
         if (m.view) return renderStandaloneView(req, m.view, m.params, 200)
         ControllerArtefact c = (ControllerArtefact) m.controller
-        invoke(req, c, actionSubmitted(req, c) ?: m.actionName, m.params)
+        invoke(req, c, m.actionName, m.params)
     }
 
     @Override

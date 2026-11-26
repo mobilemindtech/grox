@@ -61,6 +61,8 @@ sourceSets.test.groovy.srcDirs = []
 
 ## 3. Importar o código
 
+> Se você tem acesso ao repositório da app, prefira o [build paralelo](build-paralelo.md): um diretório `grox/` no próprio repositório compila o código original sem cópia, e a configuração fica num `application-grox.yml`, sem sanitizar o `application.yml`. A importação abaixo é para quando o build do Grox precisa viver em outro repositório.
+
 Copie `grails-app/` e `src/main` do projeto. No modelo dos candidatos, um `import.sh` faz isso, aplica `overrides/` e os `patches/`:
 
 ```bash

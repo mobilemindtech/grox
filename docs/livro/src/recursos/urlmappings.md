@@ -49,7 +49,7 @@ Sem nenhuma classe `UrlMappings`, vale só o mapeamento padrão `/$controller/$a
 | `controller:`, `action:` | Destino |
 | `view: '/index'` | Renderiza uma view sem controller |
 | `redirect: '/novo'` | Redireciona |
-| `method: 'POST'` ou `post "/x"(...)` (também `get`, `put`, `patch`, `delete`) | Restringe o verbo |
+| `method: 'POST'` ou `post "/x"(...)` (também `get`, `put`, `patch`, `delete`) | Restringe o verbo. Com outro verbo, a resposta é `405` se o mapeamento levaria a um controller e action existentes; senão, segue para os próximos e termina em `404` (um `GET /nao-existe` com os mapeamentos REST genéricos `delete "/$controller/$id"`... dá `404`) |
 | `action = [GET: 'show', DELETE: 'delete']` | Action por verbo |
 | `format: 'json'` | Fixa `params.format` |
 | `{ pagina = 'ajuda' }` | Parâmetros extras |

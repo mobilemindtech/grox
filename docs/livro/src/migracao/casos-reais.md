@@ -4,6 +4,8 @@ Este capítulo descreve os três projetos Grails reais migrados para o Grox: o t
 
 ## Organização no repositório
 
+Os três também têm um [build paralelo](build-paralelo.md) dentro do repositório original (`grox/` no app-c, no app A e no app B), que compila o mesmo código sem importação. Ele produz as mesmas classes que os candidatos abaixo, e as cinco apps (app A, app B, app-c-jobs, app-c-web, app-c-api) sobem no H2 por ele.
+
 Os candidatos ficam em `candidates/`, um subprojeto Gradle cada:
 
 | Arquivo | Papel |
@@ -71,9 +73,9 @@ O maior: vários módulos com um núcleo compartilhado.
 
 **Exigiu do Grox:** bibliotecas `org.grox.lib` (índice de pacotes, mensagens mescladas), audit-logging, redis, rabbitmq-native, rendering, hibernate-filter; descritores `*GrailsPlugin` e `Application.doWithSpring()`; `@PostConstruct`; API de transação do Spring; encoders do Spring Security com upgrade de hash; modelo de mapeamento do GORM; `PropertyEditorRegistrar`; GPars mínimo; actions closure; config null-safe; HQL com `?0`; `hasOne` (inclusive com filho multi-tenant ausente); artefatos no pacote padrão; `LoginController` próprio com `SecurityContextHolder` e `HttpSessionRequestCache`; cookies da Servlet API; `modelAndView` no interceptor; tags `g:` nas actions; `chainMap` do spring-security-rest; `RestTokenCreationEvent`; `principal as GrailsUser`; `grails.databinding.dateFormats`; naming do GORM com dígitos e siglas; codecs de digest; one-to-one sem `hasOne`.
 
-**Patches:** poucos e pontuais: `@DelegatesTo` com tipo parametrizado numa biblioteca interna, nome de classe do POI 5, HQL com nomes de coluna (3 lugares), tamanhos de coluna em duas domains, mapeamentos de erro para views `.gson`.
+**Patches:** poucos e pontuais: `@DelegatesTo` com tipo parametrizado numa biblioteca interna, nome de classe do POI 5, HQL com nomes de coluna (3 lugares), tamanhos de coluna em duas domains, mapeamentos de erro para views `.gson`. No [build paralelo](build-paralelo.md), todos foram levados ao app-c, com POI 5 no Grails e o app-c-api sem JSON Views, ou ficaram desnecessários: o app C não tem mais patches.
 
-**Overrides:** ymls sanitizados por aplicação, CSRF desligado no app-c-web (146 views com POST simples e 137 com AJAX POST não enviam o token), Flyway como no-op (`APPC_SKIP_FLYWAY`), `CandidateBootStrap` por aplicação, views simplificadas no app-c-jobs (Bootstrap 5 pelo asset pipeline), descritor próprio do plugin swagger.
+**Overrides:** ymls sanitizados por aplicação, CSRF desligado no app-c-web (146 views com POST simples e 137 com AJAX POST não enviam o token), Flyway desligado no H2 (hoje por uma chave de configuração do próprio app C), `CandidateBootStrap` por aplicação, views simplificadas no app-c-jobs (Bootstrap 5 pelo asset pipeline), descritor próprio do plugin swagger.
 
 **Resultado:**
 - `app-c-jobs` sobe no H2 com os 37 jobs e a tela de execução;

@@ -42,7 +42,10 @@ class Interceptor {
 
     @groovy.transform.CompileStatic
     boolean matches(String requestPath) {
-        pattern == null || pattern.matcher(requestPath).matches()
+        if (pattern == null || pattern.matcher(requestPath).matches()) return true
+        // a rota aceita a barra final (/admin/x/ roteia como /admin/x): o interceptor também
+        int n = requestPath.length()
+        n > 1 && requestPath.charAt(n - 1) == (char) '/' && pattern.matcher(requestPath.substring(0, n - 1)).matches()
     }
 
     /**

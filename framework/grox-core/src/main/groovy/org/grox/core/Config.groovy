@@ -15,6 +15,10 @@ import groovy.yaml.YamlSlurper
  * valores-folha: um bloco (Map) do YAML nunca é trocado por uma variável de ambiente
  * homônima (ex.: {@code MAIL} do shell não esconde {@code mail:}).
  *
+ * Por último entram {@code application-grox.yml} e {@code application-grox.groovy} (opcionais): o perfil {@code grox},
+ * sempre ativo no Grox e nunca no Grails (no Spring Boot, só com {@code spring.profiles.active=grox}). É onde um build
+ * paralelo guarda os ajustes do Grox sem mudar a configuração da app Grails.
+ *
  * Arquivos listados em {@code spring.config.import} (ex.: {@code classpath:shared.yml,classpath:rabbit.groovy}) são
  * mesclados por cima do arquivo que os importou, como no Spring Boot.
  *
@@ -32,8 +36,11 @@ class Config {
     /** Configuração em Groovy, na ordem em que é mesclada (a seguinte vence a anterior). */
     static final List<String> GROOVY_FILES = ['application.groovy', 'runtime.groovy']
 
+    /** Perfil {@code grox}: mesclado por cima de tudo (só propriedades de sistema e variáveis de ambiente vencem). */
+    static final List<String> PROFILE_FILES = ['application-grox.yml', 'application-grox.groovy']
+
     static Config load(ClassLoader loader, String envName, List<String> files = ['application.yml', 'application.yaml'],
-                       List<String> groovyFiles = GROOVY_FILES) {
+                       List<String> groovyFiles = GROOVY_FILES, List<String> profileFiles = PROFILE_FILES) {
         Map<String, Object> merged = [:]
         List<String> imports = []
         for (String name : files) {
@@ -59,6 +66,7 @@ class Config {
                 mergeImports(merged, importsOf(groovy, envName), envName, loader, seen)
             }
         }
+        mergeImports(merged, profileFiles.collect { 'optional:' + it }, envName, loader, seen)
         resolvePlaceholders(merged, merged)
         new Config(merged)
     }

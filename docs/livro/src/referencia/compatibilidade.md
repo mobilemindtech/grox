@@ -19,6 +19,7 @@ Legenda: ✅ suportado · 🟡 parcial · ❌ ausente (veja o `docs/roadmap.md` 
 | Scaffolding dinâmico (`static scaffold = Livro`) e tags `f:` do plugin fields | 🟡 | Actions do `RestfulController` e views geradas dos templates (`src/main/templates/scaffolding/`). Geração de código (`generate-all`), `scaffold = true` e os templates `_fields/` ❌ |
 | `application.yml` + `environments`, `application.groovy` e `runtime.groovy` (`ConfigSlurper`, mesclados ao yml) | ✅ | |
 | `spring.config.import` (`classpath:`, `file:`, `optional:`; `.yml` e `.groovy`) | ✅ | O importado vence quem o importou. Sem `configtree:`, curingas nem perfis do Spring |
+| Perfil `grox` (`application-grox.yml`/`.groovy`) | ✅ | Extensão Grox: sempre ativo no Grox, nunca no Grails. Outros perfis (`spring.profiles.active`) ❌ |
 | `application.yml` com `${VAR}` / `${VAR:padrão}` | ✅ | Propriedade de sistema, variável de ambiente ou outra chave; também em listas de mapas |
 | `config.chaveInexistente.x` null-safe (`NullSafeNavigator`), inclusive aninhada | ✅ | |
 | `grails.util.Environment` | ✅ | `current`, `executeForCurrentEnvironment`; `environments {}` no BootStrap |
@@ -98,7 +99,7 @@ Legenda: ✅ suportado · 🟡 parcial · ❌ ausente (veja o `docs/roadmap.md` 
 |---|---|---|
 | Variáveis, opcionais, `(.$format)?`, `**`, `$path**` | ✅ | |
 | `constraints { x(matches:) }`, params extras, `action = [GET:, POST:]` | ✅ | Outras constraints ❌ |
-| Verbos (`get`, `post`, ...), `method:`, `group`, `redirect:`, `view:` | ✅ | |
+| Verbos (`get`, `post`, ...), `method:`, `group`, `redirect:`, `view:` | ✅ | Outro verbo dá 405 só se o mapeamento levaria a um destino |
 | `resources:` | ✅ | `resource:` (singular), aninhamento ❌ |
 | Códigos de erro (`"404"`, `"500"`) | ✅ | `exception:` ❌ |
 | UrlMappings chamando métodos da própria classe (`findControllersInPackage`) | ✅ | |

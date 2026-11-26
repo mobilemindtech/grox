@@ -22,3 +22,18 @@ gradlePlugin {
         }
     }
 }
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation gradleTestKit()
+    testImplementation 'org.junit.jupiter:junit-jupiter:6.1.3'   // mesma versão de gradle/libs.versions.toml
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:6.1.3'
+}
+
+// testes funcionais (TestKit): o plugin aplicado a builds de exemplo em diretórios temporários
+tasks.named('test') {
+    useJUnitPlatform()
+}
