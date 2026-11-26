@@ -74,7 +74,8 @@ config.api.base                                              // navegação
 | `grox.http.requestTimeout` | `30` | Segundos para receber a requisição inteira a partir do primeiro byte (contra slowloris). `0` desliga |
 | `grox.http.idleTimeout` | `60` | Segundos sem tráfego até fechar uma conexão keep-alive sem resposta pendente. `0` desliga |
 | `grox.http.maxConnections` | `10000` | Conexões simultâneas; as excedentes são fechadas. `0` sem limite |
-| `grox.http.maxPipelined` | `16` | Requisições em voo por conexão (HTTP pipelining) antes de pausar a leitura |
+| `grox.http.maxPipelined` | `16` | Requisições em voo por conexão (HTTP pipelining) antes de pausar a leitura; as que chegaram no mesmo pacote esperam |
+| `grox.http.maxFormFields` | `1000` | Campos de um `multipart/form-data`; acima disso, `413` *(extensão Grox)* |
 | `grox.http.trustedProxies` | loopback, `10.x`, `172.16-31.x`, `192.168.x`, `169.254.x`, `::1` | Regex dos endereços cujos `X-Forwarded-For`, `X-Forwarded-Proto` e `X-Forwarded-Host` são aceitos, como o `internalProxies` do Tomcat. O endereço do cliente é o primeiro do `X-Forwarded-For` que não é proxy confiável, lido da direita para a esquerda (o da esquerda pode ser forjado). Vazio (`''`): nenhum *(extensão Grox)* |
 | `grox.http.securityHeaders` | ver abaixo | Cabeçalhos acrescentados às respostas que não os definem *(extensão Grox)* |
 
@@ -112,6 +113,7 @@ Veja [Concorrência](../recursos/concorrencia.md).
 |---|---|---|
 | `grox.session.store` | `memory` | `memory` (um nó) ou `redis` (compartilhada e persistente) |
 | `grox.session.timeout` | `1800` | Segundos de inatividade até a sessão expirar |
+| `grox.session.maxActive` | `100000` | Sessões no store `memory` (0: sem limite). Cheio, saem as expiradas e depois as 10% acessadas há mais tempo *(extensão Grox)* |
 | `grox.session.cookieName` | `GROXSESSIONID` | Nome do cookie |
 | `grox.session.cookie.secure` | `auto` | Atributo `Secure` do cookie: `auto` (em HTTPS, inclusive atrás de proxy confiável), `true` ou `false` |
 | `grox.session.redis.url` | `redis://localhost:6379` | URL do Redis. Com senha: `redis://:senha@host:6379` |

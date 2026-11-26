@@ -43,6 +43,13 @@ class RouteContext implements ViewRequest {
         this.params = buildParams(request, routeParams)
         this.requestSession = RequestSession.of(request, env.sessions)
         request.sessionProvider = { Boolean create -> getSession(create) } as java.util.function.Function<Boolean, GroxSession>
+    }
+
+    /**
+     * Avança o flash da requisição anterior. Carrega a sessão (no Redis, uma ida à rede), então roda na thread do
+     * handler, nunca no construtor, que é chamado no event loop do Netty.
+     */
+    void advanceFlash() {
         if (request.getAttribute('grox.flashAdvanced') == null && requestSession.hasCookie()) {
             request.setAttribute('grox.flashAdvanced', true)
             ((FlashScope) requestSession.get(false)?.getAttribute(FlashScope.KEY))?.advance()

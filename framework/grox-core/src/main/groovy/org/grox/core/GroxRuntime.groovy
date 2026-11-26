@@ -132,6 +132,7 @@ class GroxRuntime implements AutoCloseable {
             server.idleTimeoutSeconds = config.getProperty('grox.http.idleTimeout', Integer, 60)
             server.maxConnections = config.getProperty('grox.http.maxConnections', Integer, 10_000)
             server.maxPipelined = config.getProperty('grox.http.maxPipelined', Integer, 16)
+            server.maxFormFields = config.getProperty('grox.http.maxFormFields', Integer, org.grox.http.NettyHttpHandler.DEFAULT_MAX_FORM_FIELDS)
             server.start()
         }
         if (!handoff) Runtime.runtime.addShutdownHook(Thread.ofPlatform().unstarted { close() })

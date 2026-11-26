@@ -137,4 +137,67 @@ class NettyLimitsTest {
             s.close()
         }
     }
+
+    @Test
+    void 'pipelining: requisicoes decodificadas do mesmo read esperam, no maximo maxPipelined em voo'() {
+        def emVoo = new java.util.concurrent.atomic.AtomicInteger()
+        def maximo = new java.util.concurrent.atomic.AtomicInteger()
+        RequestDispatcher contador = { GroxRequest req ->
+            maximo.accumulateAndGet(emVoo.incrementAndGet(), Math::max)
+            CompletableFuture.supplyAsync {
+                Thread.sleep(5)
+                emVoo.decrementAndGet()
+                def resp = new GroxResponse(contentType: 'text/plain')
+                resp.writer.write(req.path)
+                resp
+            }
+        } as RequestDispatcher
+        def s = new NettyServer('127.0.0.1', 0, 1024, 1, contador)
+        s.maxPipelined = 4
+        s.idleTimeoutSeconds = 0
+        s.start()
+        try {
+            def socket = connect(s)
+            // todas num único write: o codec decodifica várias do mesmo read
+            send(socket, (1..60).collect { "GET /r${it} HTTP/1.1\r\nHost: x\r\n" + (it == 60 ? 'Connection: close\r\n' : '') + '\r\n' }.join(''))
+            String r = readAll(socket)
+            assert (r =~ /\/r\d+/).collect { it } == (1..60).collect { "/r${it}".toString() }
+            assert maximo.get() <= 4   // antes: todas as decodificadas eram despachadas de uma vez
+            assert s.inFlight.get() == 0
+        } finally {
+            s.close()
+        }
+    }
+
+    @Test
+    void 'multipart com campos demais: 413, sem derrubar a conexao nem prender o inFlight'() {
+        RequestDispatcher campos = { GroxRequest req ->
+            def resp = new GroxResponse(contentType: 'text/plain')
+            resp.writer.write("campos=${req.formParameters.size()}")
+            CompletableFuture.completedFuture(resp)
+        } as RequestDispatcher
+        def s = new NettyServer('127.0.0.1', 0, 1_000_000, 1, campos)
+        s.maxFormFields = 150
+        s.idleTimeoutSeconds = 0
+        s.start()
+        Closure<String> multipart = { int n, boolean fechar ->
+            String corpo = (1..n).collect { "--b\r\nContent-Disposition: form-data; name=\"c${it}\"\r\n\r\nv\r\n" }.join('') + '--b--\r\n'
+            byte[] bytes = corpo.getBytes(StandardCharsets.UTF_8)
+            "POST /f HTTP/1.1\r\nHost: x\r\nContent-Type: multipart/form-data; boundary=b\r\nContent-Length: ${bytes.length}\r\n" +
+                    (fechar ? 'Connection: close\r\n' : '') + "\r\n" + corpo
+        }
+        try {
+            def socket = connect(s)
+            send(socket, multipart(200, false))   // acima de 150
+            String r = readAll(socket)
+            // antes: a conexão fechava sem resposta e o inFlight ficava em 1 (o desligamento esperava o prazo inteiro)
+            assert r.startsWith('HTTP/1.1 413') && r.contains('connection: close')
+            def outra = connect(s)
+            send(outra, multipart(100, true))
+            assert readAll(outra).contains('campos=100')
+            assert s.inFlight.get() == 0
+        } finally {
+            s.close()
+        }
+    }
 }

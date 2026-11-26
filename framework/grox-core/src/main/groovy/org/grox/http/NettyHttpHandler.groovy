@@ -40,6 +40,8 @@ class NettyHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     private long nextSeq
     private long writeSeq
     private final TreeMap<Long, Object[]> pending = new TreeMap<>()
+    /** Requisições já decodificadas além de {@code maxPipelined} em voo: esperam as respostas saírem. */
+    private final ArrayDeque<FullHttpRequest> waiting = new ArrayDeque<>()
 
     NettyHttpHandler(RequestDispatcher dispatcher, NettyServer server = null) {
         this.dispatcher = dispatcher
@@ -49,9 +51,18 @@ class NettyHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     @Override
     protected void channelRead0(ChannelHandlerContext ctx, FullHttpRequest msg) {
         ctx.pipeline().get(RequestDeadlineHandler)?.requestComplete()
-        long seq = nextSeq++
         server?.inFlight?.incrementAndGet()
-        // pipelining: muitas requisições em voo pausam a leitura até as respostas saírem
+        // pipelining: com maxPipelined em voo, a leitura pausa; as que o codec já decodificou do mesmo read esperam
+        if (server != null && nextSeq - writeSeq >= server.maxPipelined) {
+            ctx.channel().config().autoRead = false
+            waiting.addLast(msg.retain())
+            return
+        }
+        process(ctx, msg)
+    }
+
+    private void process(ChannelHandlerContext ctx, FullHttpRequest msg) {
+        long seq = nextSeq++
         if (server != null && nextSeq - writeSeq >= server.maxPipelined) ctx.channel().config().autoRead = false
         boolean keepAlive = HttpUtil.isKeepAlive(msg)
         boolean head = msg.method() == HttpMethod.HEAD
@@ -61,8 +72,12 @@ class NettyHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         }
         GroxRequest request
         try {
-            request = convert(msg, ctx)
-        } catch (HttpPostRequestDecoder.ErrorDataDecoderException | IllegalArgumentException e) {
+            request = convert(msg, ctx, server != null ? server.maxFormFields : DEFAULT_MAX_FORM_FIELDS)
+        } catch (HttpPostRequestDecoder.TooManyFormFieldsException e) {
+            log.debug("Campos demais em ${msg.method()} ${msg.uri()} (grox.http.maxFormFields)")
+            enqueue(ctx, seq, plain(HttpResponseStatus.REQUEST_ENTITY_TOO_LARGE, 'Payload Too Large'), false)
+            return
+        } catch (io.netty.handler.codec.DecoderException | IllegalArgumentException e) {
             // corpo malformado (multipart, formulário): erro do cliente, sem stack trace no log
             log.debug("Corpo inválido em ${msg.method()} ${msg.uri()}: ${e}")
             enqueue(ctx, seq, plain(HttpResponseStatus.BAD_REQUEST, 'Bad Request'), false)
@@ -104,9 +119,27 @@ class NettyHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
             f.addListener { server?.inFlight?.decrementAndGet() }
             if (!ka) f.addListener(ChannelFutureListener.CLOSE)
         }
-        if (server != null && !ctx.channel().config().autoRead && nextSeq - writeSeq < server.maxPipelined) {
+        while (!waiting.isEmpty() && (server == null || nextSeq - writeSeq < server.maxPipelined)) {
+            FullHttpRequest next = waiting.pollFirst()
+            try {
+                process(ctx, next)
+            } finally {
+                next.release()
+            }
+        }
+        if (server != null && waiting.isEmpty() && !ctx.channel().config().autoRead && nextSeq - writeSeq < server.maxPipelined) {
             ctx.channel().config().autoRead = true
         }
+    }
+
+    /** Conexão fechada com requisições esperando: libera os buffers e o contador de em andamento. */
+    @Override
+    void channelInactive(ChannelHandlerContext ctx) {
+        while (!waiting.isEmpty()) {
+            waiting.pollFirst().release()
+            server?.inFlight?.decrementAndGet()
+        }
+        ctx.fireChannelInactive()
     }
 
     /** Conexão ociosa (sem tráfego e sem resposta pendente): fecha. */
@@ -119,7 +152,10 @@ class NettyHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         ctx.fireUserEventTriggered(evt)
     }
 
-    static GroxRequest convert(FullHttpRequest msg, ChannelHandlerContext ctx) {
+    /** Padrão de {@code grox.http.maxFormFields} (o mesmo {@code maxParameterCount} do Tomcat). */
+    static final int DEFAULT_MAX_FORM_FIELDS = 1000
+
+    static GroxRequest convert(FullHttpRequest msg, ChannelHandlerContext ctx, int maxFormFields = DEFAULT_MAX_FORM_FIELDS) {
         def decoder = new QueryStringDecoder(msg.uri())
         def headers = new HeaderMap()
         for (Map.Entry<String, String> h : msg.headers()) headers.add(h.key, h.value)
@@ -137,7 +173,7 @@ class NettyHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         if (ct?.startsWith('application/x-www-form-urlencoded') && body.length) {
             request.formParameters = new QueryStringDecoder(new String(body, request.charset), request.charset, false).parameters()
         } else if (ct?.startsWith('multipart/form-data') && body.length) {
-            decodeMultipart(msg, request)
+            decodeMultipart(msg, request, maxFormFields)
         }
         String cookieHeader = headers.getFirst('Cookie')
         if (cookieHeader) {
@@ -147,8 +183,9 @@ class NettyHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     }
 
     /** Campos e arquivos de multipart/form-data (a requisição já está agregada em memória). */
-    static void decodeMultipart(FullHttpRequest msg, GroxRequest request) {
-        def decoder = new HttpPostRequestDecoder(new DefaultHttpDataFactory(false), msg, StandardCharsets.UTF_8)
+    static void decodeMultipart(FullHttpRequest msg, GroxRequest request, int maxFields = DEFAULT_MAX_FORM_FIELDS) {
+        // 1024: o padrão do Netty para o que o decoder acumula enquanto procura o fim de um campo
+        def decoder = new HttpPostRequestDecoder(new DefaultHttpDataFactory(false), msg, StandardCharsets.UTF_8, maxFields, 1024)
         try {
             Map<String, List<String>> fields = [:]
             Map<String, List<GroxMultipartFile>> files = [:]

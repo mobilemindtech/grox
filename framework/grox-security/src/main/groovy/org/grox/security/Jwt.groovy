@@ -88,20 +88,37 @@ class Jwt {
     Map verify(String token) {
         String[] parts = token.split(/\./)
         if (parts.length != 3) return null
-        byte[] expected = sign(parts[0] + '.' + parts[1])
-        byte[] given
-        try {
-            given = Base64.urlDecoder.decode(parts[2])
-            Map header = (Map) new JsonSlurper().parseText(new String(Base64.urlDecoder.decode(parts[0]), 'UTF-8'))
-            if (header.alg != 'HS256') return null
-        } catch (IllegalArgumentException | groovy.json.JsonException ignored) {
-            return null
-        }
-        if (!MessageDigest.isEqual(expected, given)) return null
-        Map claims = (Map) new JsonSlurper().parseText(new String(Base64.urlDecoder.decode(parts[1]), 'UTF-8'))
+        // a assinatura primeiro: nada vindo do cliente é interpretado antes de ela conferir
+        byte[] given = decode(parts[2])
+        if (given == null || !MessageDigest.isEqual(sign(parts[0] + '.' + parts[1]), given)) return null
+        Object header = json(parts[0])
+        if (!(header instanceof Map) || ((Map) header).alg != 'HS256') return null
+        Object parsed = json(parts[1])
+        if (!(parsed instanceof Map)) return null
+        Map claims = (Map) parsed
         if (claims.iss != ISSUER || !(claims.exp instanceof Number) || (claims.exp as long) < System.currentTimeMillis().intdiv(1000)) return null
         if (claims.jti && revocations.isRevoked(claims.jti.toString())) return null
         claims
+    }
+
+    /** Base64url; null se inválido. */
+    private static byte[] decode(String part) {
+        try {
+            return Base64.urlDecoder.decode(part)
+        } catch (IllegalArgumentException ignored) {
+            return null
+        }
+    }
+
+    /** JSON de um trecho do token (qualquer tipo); null se não for Base64url nem JSON válido. */
+    private static Object json(String part) {
+        byte[] bytes = decode(part)
+        if (bytes == null) return null
+        try {
+            return new JsonSlurper().parseText(new String(bytes, 'UTF-8'))
+        } catch (groovy.json.JsonException | IllegalArgumentException ignored) {
+            return null
+        }
     }
 
     private byte[] sign(String data) {

@@ -35,7 +35,7 @@ grox:
 
 | Store | Quando usar |
 |---|---|
-| `memory` | Um nó só. As sessões ficam na memória do processo e somem no reinício |
+| `memory` | Um nó só. As sessões ficam na memória do processo e somem no reinício. Até `grox.session.maxActive` sessões (padrão 100 mil): cheio, saem as expiradas e depois as 10% acessadas há mais tempo, que sob um robô são as dele |
 | `redis` | Vários nós ou sessões que sobrevivem a reinícios. Cliente Lettuce (que usa o Netty, sem outra pilha de IO) |
 
 Outros stores (JDBC, Hazelcast) não existem; quem precisar pode implementar `org.grox.session.SessionRepository`.

@@ -148,15 +148,15 @@ Revisão do framework inteiro (a modularização moveu todos os fontes desde a d
 - [x] `Passwords.isEncoded` só reconhece hashes (antes, `{noop}segredo` vindo do usuário era gravado em texto puro); o padrão da documentação e do sample passou a codificar quando `isDirty('password')`
 - [x] `X-Forwarded-For` lido da direita para a esquerda, pulando os proxies confiáveis (o valor da esquerda pode ser forjado)
 
-**Prioridade 2 (disponibilidade e exceções por requisição):**
-- [ ] Multipart com mais de 128 campos: `TooManyFormFieldsException` fecha a conexão sem resposta e deixa o `inFlight` preso; `grox.http.maxFormFields`
-- [ ] `Accept` com `q` inválido: 500, três stack traces e o contador `active` das métricas preso (`MimeTypes.fromAccept`)
-- [ ] JWT com cabeçalho que não é objeto JSON: 500 com stack trace (`Jwt.verify`)
-- [ ] Caches do `MessageSource` crescem um mapa por locale vindo de `?lang=`/`Accept-Language`
-- [ ] Sessões em memória sem limite (`grox.session.maxActive`); GET anônimo numa página protegida cria sessão para guardar a URL
-- [ ] `maxPipelined` não limita as requisições decodificadas do mesmo read (`maxPipelineDepth` do codec)
-- [ ] Rotas da DSL carregam a sessão (Redis) no event loop, ao montar o `RouteContext`
-- [ ] `<g:datePicker>` com valor inválido: 500 em vez de `typeMismatch`
+**Prioridade 2 (disponibilidade e exceções por requisição, feito):**
+- [x] Multipart com mais de 128 campos: `TooManyFormFieldsException` fecha a conexão sem resposta e deixa o `inFlight` preso; `grox.http.maxFormFields`
+- [x] `Accept` com `q` inválido: 500, três stack traces e o contador `active` das métricas preso (`MimeTypes.fromAccept`)
+- [x] JWT com cabeçalho que não é objeto JSON: 500 com stack trace (`Jwt.verify`)
+- [x] Caches do `MessageSource` crescem um mapa por locale vindo de `?lang=`/`Accept-Language`
+- [x] Sessões em memória sem limite (`grox.session.maxActive`); GET anônimo numa página protegida cria sessão para guardar a URL
+- [x] `maxPipelined` não limita as requisições decodificadas do mesmo read (`maxPipelineDepth` do codec)
+- [x] Rotas da DSL carregam a sessão (Redis) no event loop, ao montar o `RouteContext`
+- [x] `<g:datePicker>` com valor inválido: 500 em vez de `typeMismatch`
 
 **Prioridade 3 (correção, comparado ao Grails):**
 - [ ] Exceção numa transação participante não marca rollback-only: commit parcial silencioso

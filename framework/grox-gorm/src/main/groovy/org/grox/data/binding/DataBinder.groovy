@@ -93,7 +93,14 @@ class DataBinder {
             Object raw = src.get(n)
             if ((raw == 'date.struct' || (raw == null && src.containsKey(n + '_year'))) && (mp.type == Date || mp.type == LocalDate || mp.type == LocalDateTime)) {
                 // <g:datePicker>: nome_year, nome_month, nome_day [, nome_hour, nome_minute]
-                mp.setProperty(target, dateStruct(src, n, mp.type))
+                Object date = dateStruct(src, n, mp.type)
+                if (date.is(INVALID_DATE)) {
+                    // valor do usuário fora do formato ou do calendário: erro de validação no campo, como no Grails
+                    mp.setProperty(target, null)
+                    recordMismatch(target, n, mp.type, dateStructText(src, n))
+                } else {
+                    mp.setProperty(target, date)
+                }
                 continue
             }
             if (raw == null && !src.containsKey(n)) {
@@ -151,21 +158,37 @@ class DataBinder {
         target
     }
 
+    /** Data inválida num {@code <g:datePicker>} (o {@link #dateStruct} não lança exceção por entrada do usuário). */
+    static final Object INVALID_DATE = new Object()
+
+    /** As partes do {@code <g:datePicker>}; {@link #INVALID_DATE} se não forem números ou não formarem uma data. */
     static Object dateStruct(Map src, String name, Class<?> type) {
-        Closure<Integer> part = { String p, int dflt ->
+        Closure<String> text = { String p ->
             Object v = src.get("${name}_${p}".toString())
             if (v instanceof Collection) v = ((Collection) v) ? ((Collection) v).iterator().next() : null
-            v == null || v.toString().trim().isEmpty() ? dflt : Integer.parseInt(v.toString().trim())
+            v?.toString()?.trim() ?: null
         }
-        Integer year = part('year', -1)
-        if (year < 0) return null
-        int month = part('month', 1), day = part('day', 1), hour = part('hour', 0), minute = part('minute', 0)
+        String y = text('year')
+        if (y == null) return null
+        List<String> raw = [y, text('month'), text('day'), text('hour'), text('minute')]
+        if (raw.any { it != null && !(it ==~ /\d{1,4}/) }) return INVALID_DATE
+        int year = y as int
+        int month = raw[1] != null ? raw[1] as int : 1, day = raw[2] != null ? raw[2] as int : 1
+        int hour = raw[3] != null ? raw[3] as int : 0, minute = raw[4] != null ? raw[4] as int : 0
+        if (month < 1 || month > 12 || day < 1 || day > java.time.YearMonth.of(year, month).lengthOfMonth() || hour > 23 || minute > 59) {
+            return INVALID_DATE
+        }
         if (type == LocalDate) return LocalDate.of(year, month, day)
         if (type == LocalDateTime) return LocalDateTime.of(year, month, day, hour, minute)
         Calendar c = Calendar.instance
         c.clear()
         c.set(year, month - 1, day, hour, minute, 0)
         c.time
+    }
+
+    /** O valor rejeitado de um {@code <g:datePicker>} inválido, para a mensagem de erro. */
+    private static String dateStructText(Map src, String name) {
+        ['year', 'month', 'day', 'hour', 'minute'].collect { src.get("${name}_${it}".toString()) }.findAll { it != null }.join('-')
     }
 
     private static final Map<List, String> FORMATS = new java.util.concurrent.ConcurrentHashMap<>()

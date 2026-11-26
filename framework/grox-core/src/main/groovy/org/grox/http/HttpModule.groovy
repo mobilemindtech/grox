@@ -88,7 +88,8 @@ class HttpModule extends GroxModule {
         int timeout = config.getProperty('grox.session.timeout', Integer, 1800)
         String store = config.getProperty('grox.session.store', String, 'memory')
         return switch (store) {
-            case 'memory' -> new MemorySessionRepository(cookie, timeout)
+            case 'memory' -> new MemorySessionRepository(cookie, timeout,
+                    config.getProperty('grox.session.maxActive', Integer, MemorySessionRepository.DEFAULT_MAX_ACTIVE))
             case 'redis' -> new RedisSessionRepository(
                     config.getProperty('grox.session.redis.url', String, 'redis://localhost:6379'),
                     config.getProperty('grox.session.redis.keyPrefix', String, 'grox:session:'),

@@ -19,8 +19,12 @@ class MessageSource {
     private final Map<Locale, List<String>> suffixCache = new ConcurrentHashMap<>()
     private final Map<Locale, Map<String, String>> patternCache = new ConcurrentHashMap<>()
     private final Map<Locale, Map<String, MessageFormat>> formatCache = new ConcurrentHashMap<>()
+    /** Sufixo ({@code _pt_BR}) → existe arquivo de mensagens com ele. */
+    private final Map<String, Boolean> available = new ConcurrentHashMap<>()
     private static final String MISSING = new String('<ausente>')
     static final int MAX_CACHED = 20_000
+    /** Sufixos inexistentes guardados no cache (o resto é consultado no classpath a cada vez). */
+    static final int MAX_MISSING_SUFFIXES = 1_000
 
     MessageSource(ClassLoader loader, String basename, Locale defaultLocale) {
         this.loader = loader
@@ -32,7 +36,7 @@ class MessageSource {
 
     /** Mensagem de um erro de validação (ou outra {@link MessageResolvable}): tenta cada código, depois a mensagem padrão. */
     String getMessage(MessageResolvable error, Locale locale) {
-        Locale l = locale ?: defaultLocale
+        Locale l = effective(locale)
         for (String code : error.codes) {
             String pattern = find(code, l)
             if (pattern != null) return format(pattern, error.arguments?.toList(), l)
@@ -56,11 +60,32 @@ class MessageSource {
         String pattern = code ? find(code, locale ?: defaultLocale) : null
         if (pattern == null) pattern = defaultMessage
         if (pattern == null) return code
-        format(pattern, args, locale ?: defaultLocale)
+        format(pattern, args, effective(locale))
+    }
+
+    /**
+     * O locale que de fato tem mensagens: o pedido ({@code pt_BR}), só o idioma ({@code pt}) ou o padrão. Os caches são
+     * por ele, e não pelo locale pedido, que vem do cliente ({@code ?lang=}, {@code Accept-Language}): com locales
+     * inventados, eles cresceriam sem limite.
+     */
+    Locale effective(Locale requested) {
+        if (requested == null || requested == defaultLocale) return defaultLocale
+        String lang = requested.language
+        if (!lang) return defaultLocale
+        if (requested.country && hasBundle("_${lang}_${requested.country}".toString())) return Locale.of(lang, requested.country)
+        hasBundle("_${lang}".toString()) ? Locale.of(lang) : defaultLocale
+    }
+
+    private boolean hasBundle(String suffix) {
+        Boolean cached = available.get(suffix)
+        if (cached != null) return cached
+        boolean exists = basenames.any { String b -> loader.getResource("${b}${suffix}.properties") != null }
+        if (exists || available.size() < MAX_MISSING_SUFFIXES) available.put(suffix, exists)
+        exists
     }
 
     String find(String code, Locale requested) {
-        Locale locale = requested ?: defaultLocale
+        Locale locale = effective(requested)
         Map<String, String> byCode = patternCache.computeIfAbsent(locale) { new ConcurrentHashMap<String, String>() }
         String cached = byCode.get(code)
         if (cached != null) return cached.is(MISSING) ? null : cached

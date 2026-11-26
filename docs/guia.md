@@ -1454,6 +1454,7 @@ Na aplicação: `grailsApplication.config.getProperty('api.base')`, `config.getP
 | `grox.controllers.concurrency` | `pool` | `pool` ou `request` |
 | `grox.controllers.poolSize` | 2 × CPUs | Atores por controller no modo pool |
 | `grox.session.timeout` | `1800` | Segundos de inatividade |
+| `grox.session.maxActive` | `100000` | Sessões no store `memory` (0: sem limite); cheio, saem as expiradas e as 10% acessadas há mais tempo |
 | `grox.session.cookieName` | `GROXSESSIONID` | |
 | `grox.http.maxContentLength` | `10485760` | Corpo máximo, em bytes (acima disso, 413) |
 | `grox.http.workerThreads` | `0` (Netty decide) | Event loops |
@@ -1461,6 +1462,7 @@ Na aplicação: `grailsApplication.config.getProperty('api.base')`, `config.getP
 | `grox.http.idleTimeout` | `60` | Segundos sem tráfego até fechar uma conexão keep-alive sem resposta pendente. `0` desliga |
 | `grox.http.maxConnections` | `10000` | Conexões simultâneas; as excedentes são fechadas. `0` sem limite |
 | `grox.http.maxPipelined` | `16` | Requisições em voo por conexão (HTTP pipelining) antes de pausar a leitura |
+| `grox.http.maxFormFields` | `1000` | Campos de um multipart; acima disso, `413` |
 | `grox.http.trustedProxies` | loopback e redes privadas | Regex dos endereços cujos `X-Forwarded-For/Proto/Host` são aceitos, como o `internalProxies` do Tomcat. O cliente é o primeiro endereço do `X-Forwarded-For` que não é proxy confiável, da direita para a esquerda. Vazio: nenhum |
 | `grox.http.securityHeaders` | `nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy: strict-origin-when-cross-origin` | Acrescentados às respostas que não os definem. Um mapa troca ou acrescenta (ex.: `Strict-Transport-Security`); valor vazio remove um; `false` desliga |
 | `grox.session.cookie.secure` | `auto` | `Secure` no cookie de sessão: `auto` (em HTTPS), `true` ou `false` |

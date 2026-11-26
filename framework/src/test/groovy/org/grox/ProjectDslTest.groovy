@@ -86,4 +86,33 @@ class ProjectDslTest {
         assert um.matches('/admin/x') && um.matches('/admin/x/') && !um.matches('/admin/x/y')
         assert new org.grox.dsl.Interceptor('before', '/', { -> }).matches('/')
     }
+
+    @Test
+    void 'RouteContext nao carrega a sessao no construtor (event loop), so no advanceFlash'() {
+        List<String> consultas = []
+        def repo = new org.grox.session.MemorySessionRepository('SESSION', 1800) {
+            @Override
+            org.grox.http.GroxSession find(String id) {
+                consultas << Thread.currentThread().name
+                super.find(id)
+            }
+        }
+        try {
+            def sessao = repo.create()
+            def flash = new org.grox.http.FlashScope()
+            flash.put('message', 'salvo')
+            sessao.setAttribute(org.grox.http.FlashScope.KEY, flash)
+            repo.save(sessao)
+            def req = new org.grox.http.GroxRequest(method: 'GET', path: '/x', uri: '/x')
+            req.cookieValues = [SESSION: sessao.id]
+            def route = new org.grox.dsl.Route(group: new org.grox.dsl.RouteGroup('g', null), action: 'x', httpMethod: 'GET', path: '/x')
+            def ctx = new org.grox.dsl.RouteContext(req, route, [:], new org.grox.dsl.DslEnvironment(sessions: repo))
+            assert consultas.isEmpty()   // antes: o construtor buscava a sessão (no Redis, uma ida à rede no event loop)
+            ctx.advanceFlash()
+            ctx.advanceFlash()           // uma vez por requisição
+            assert consultas.size() == 1
+        } finally {
+            repo.close()
+        }
+    }
 }

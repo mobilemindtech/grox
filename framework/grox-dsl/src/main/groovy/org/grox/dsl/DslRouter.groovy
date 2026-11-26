@@ -81,6 +81,7 @@ class DslRouter implements Router, AutoCloseable {
 
     /** Executa o handler com a requisição, a autenticação e a sessão de dados (open session in view). */
     static GroxResponse run(Route route, Object instance, RouteContext ctx) {
+        ctx.advanceFlash()
         Authentication auth = (Authentication) ctx.request.getAttribute(SecurityContextHolder.REQUEST_ATTR)
         CurrentRequest.with(ctx) {
             SecurityContextHolder.with(auth) {

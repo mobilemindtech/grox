@@ -184,7 +184,7 @@ Formatos aceitos para texto em `Date`, nesta ordem:
 3. editores registrados pela aplicação (abaixo);
 4. os formatos ISO do Grox (`yyyy-MM-dd`, `yyyy-MM-dd'T'HH:mm:ss`...).
 
-O `g:datePicker` envia `nome_day`, `nome_month` e `nome_year` (e hora e minuto), e o binding os junta.
+O `g:datePicker` envia `nome_day`, `nome_month` e `nome_year` (e hora e minuto), e o binding os junta. Partes que não são números ou que não formam uma data (`31/02`, mês 13) viram erro `typeMismatch` no campo, que fica `null`.
 
 ### Editores do Spring
 

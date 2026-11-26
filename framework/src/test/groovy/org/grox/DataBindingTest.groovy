@@ -13,6 +13,32 @@ class DataBindingTest {
         Date nascimento
     }
 
+    /** Como um command object: guarda os erros de binding. */
+    static class Agenda implements org.grox.data.validation.ValidationSupport {
+        Date inicio
+        LocalDate dia
+        java.time.LocalDateTime hora
+    }
+
+    @Test
+    void 'datePicker: partes validas viram data, invalidas viram typeMismatch sem excecao'() {
+        def ok = DataBinder.bind(new Agenda(), [inicio: 'date.struct', inicio_year: '2026', inicio_month: '2', inicio_day: '28',
+                                                dia_year: '2026', dia_month: '12', dia_day: '25',
+                                                hora_year: '2026', hora_month: '1', hora_day: '2', hora_hour: '10', hora_minute: '30'])
+        assert new java.text.SimpleDateFormat('yyyy-MM-dd').format(ok.inicio) == '2026-02-28'
+        assert ok.dia == LocalDate.of(2026, 12, 25) && ok.hora == java.time.LocalDateTime.of(2026, 1, 2, 10, 30)
+        assert !ok.hasErrors()
+        // antes: NumberFormatException e DateTimeException (500); o Date aceitava 31/02 e virava 03/03
+        def ruim = DataBinder.bind(new Agenda(), [inicio_year: '20x4', inicio_month: '1', inicio_day: '1',
+                                                  dia_year: '2026', dia_month: '13', dia_day: '1',
+                                                  hora_year: '2026', hora_month: '2', hora_day: '31', hora_hour: '0', hora_minute: '0'])
+        assert ruim.inicio == null && ruim.dia == null && ruim.hora == null
+        assert ruim.errors.getFieldError('inicio').codes.contains('typeMismatch') && ruim.errors.getFieldError('inicio').rejectedValue == '20x4-1-1'
+        assert ruim.errors.getFieldError('dia') && ruim.errors.getFieldError('hora')
+        // sem o ano: o campo fica vazio, sem erro
+        assert DataBinder.bind(new Agenda(), [inicio: 'date.struct', inicio_month: '1']).with { inicio == null && !hasErrors() }
+    }
+
     @Test
     void 'grails databinding dateFormats define os formatos de Date aceitos no binding'() {
         def iso = new java.text.SimpleDateFormat('yyyy-MM-dd')
@@ -137,6 +163,11 @@ class DataBindingTest {
         assert Formats.fromAccept('text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8') == 'html'
         assert Formats.fromAccept('text/html;q=0.5, application/json') == 'json'
         assert Formats.fromAccept('application/vnd.api+json') == 'json'
+        // q inválido vem do cliente: conta como 0, sem exceção (antes: NumberFormatException e 500)
+        assert Formats.fromAccept('text/html;q=x') == 'html'
+        assert Formats.fromAccept('text/html;q=abc, application/json') == 'json'
+        assert Formats.fromAccept('text/html;q=1e9, application/json;q=0.1') == 'json'
+        assert Formats.fromAccept('text/html;q=, application/json;q=0.2') == 'html'
     }
 
     @Test

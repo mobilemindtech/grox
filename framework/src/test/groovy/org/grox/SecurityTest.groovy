@@ -193,6 +193,18 @@ class SecurityTest {
         assert new Jwt('0123456789abcdef0123456789abcdef', -5).with { authenticate(create(auth().principal)) } == null
         assert jwt.authenticate('lixo') == null
         assertThrows(IllegalArgumentException) { new Jwt('curto', 60) }
+        // cabeçalho que não é objeto JSON (de qualquer anônimo): null, sem exceção (antes: 500 com stack trace)
+        ['W10.e30.AAAA', 'bnVsbA.e30.AAAA', 'IjEi.e30.AA', '!!!.e30.AA', 'e30.e30.%%%'].each { assert jwt.authenticate(it) == null }
+        // mesmo com a assinatura certa, cabeçalho ou claims que não são objetos são recusados
+        Closure<String> b64 = { String v -> Base64.urlEncoder.withoutPadding().encodeToString(v.bytes) }
+        Closure<String> assinado = { String header, String claims ->
+            String semAssinatura = b64(header) + '.' + b64(claims)
+            semAssinatura + '.' + Base64.urlEncoder.withoutPadding().encodeToString(jwt.sign(semAssinatura))
+        }
+        assert jwt.authenticate(assinado('[]', '{"sub":"x","iss":"grox","exp":9999999999}')) == null
+        assert jwt.authenticate(assinado('{"alg":"HS256"}', '[1]')) == null
+        assert jwt.authenticate(assinado('{"alg":"none"}', '{"sub":"x","iss":"grox","exp":9999999999}')) == null
+        assert jwt.authenticate(assinado('{"alg":"HS256"}', '{"sub":"x","iss":"grox","exp":9999999999}')).name == 'x'
     }
 
     @Test

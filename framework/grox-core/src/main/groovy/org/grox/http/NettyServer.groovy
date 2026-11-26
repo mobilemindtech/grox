@@ -40,6 +40,8 @@ class NettyServer implements AutoCloseable {
     int maxConnections = 10_000
     /** {@code grox.http.maxPipelined}: requisições em voo por conexão antes de pausar a leitura. */
     int maxPipelined = 16
+    /** {@code grox.http.maxFormFields}: campos de um multipart/form-data; acima disso, 413. */
+    int maxFormFields = NettyHttpHandler.DEFAULT_MAX_FORM_FIELDS
 
     NettyServer(String host, int port, int maxContentLength, int workerThreads, RequestDispatcher dispatcher) {
         this.host = host

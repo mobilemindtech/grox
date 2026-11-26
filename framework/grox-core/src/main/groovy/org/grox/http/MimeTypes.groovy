@@ -28,7 +28,7 @@ class MimeTypes {
             double q = 1d
             pieces.drop(1).each { String param ->
                 String[] kv = param.trim().split('=')
-                if (kv[0] == 'q' && kv.length > 1) q = kv[1] as double
+                if (kv[0] == 'q' && kv.length > 1) q = quality(kv[1])
             }
             types << [pieces[0].trim().toLowerCase(), q, i]
         }
@@ -57,5 +57,12 @@ class MimeTypes {
 
     static String mimeType(String format) {
         FORMAT_TO_MIME[format] ?: 'text/html'
+    }
+
+    /** O {@code q} de um tipo do {@code Accept}; inválido (vem do cliente) conta como 0, sem exceção. */
+    private static double quality(String value) {
+        String v = value.trim()
+        if (!(v ==~ /(0(\.\d{0,3})?|1(\.0{0,3})?)/)) return 0d
+        Double.parseDouble(v)
     }
 }

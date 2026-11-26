@@ -50,7 +50,14 @@ class HttpPipeline implements RequestDispatcher, AutoCloseable {
     @Override
     CompletableFuture<GroxResponse> dispatch(GroxRequest req) {
         long start = management?.metrics?.begin() ?: System.nanoTime()
-        route(req).thenCompose { GroxResponse r -> commitSession(req, r) }.thenApply { GroxResponse r -> withSecurityHeaders(r) }.whenComplete { GroxResponse r, Throwable e ->
+        CompletableFuture<GroxResponse> routed
+        try {
+            routed = route(req)
+        } catch (Throwable t) {
+            // exceção síncrona (fora do future): ainda passa pelo end das métricas e pelo access log
+            routed = CompletableFuture.failedFuture(t)
+        }
+        routed.thenCompose { GroxResponse r -> commitSession(req, r) }.thenApply { GroxResponse r -> withSecurityHeaders(r) }.whenComplete { GroxResponse r, Throwable e ->
             String key = routeKey(req)
             management?.metrics?.end(req, r, e, start, key)
             accessLog?.log(req, r, e, start, key)

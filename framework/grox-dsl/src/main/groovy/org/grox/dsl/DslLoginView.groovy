@@ -19,6 +19,7 @@ class DslLoginView implements LoginView {
     GroxResponse render(GroxRequest req, Map<String, Object> model) {
         def route = new Route(group: new RouteGroup('login', null), action: 'auth', httpMethod: 'GET', path: req.path)
         def ctx = new RouteContext(req, route, [:], env)
+        ctx.advanceFlash()   // como nas rotas (aqui já fora do event loop: o filtro de segurança roda numa virtual thread)
         Map<String, Object> m = new LinkedHashMap(model)
         m.errorMessage = model.errorCode ? env.messages.getMessage(model.errorCode.toString(), null, null, ctx.locale) : null
         ctx.response.setHeader('Cache-Control', 'no-store')

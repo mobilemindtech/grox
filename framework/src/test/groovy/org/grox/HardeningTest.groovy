@@ -100,4 +100,28 @@ class HardeningTest {
         (1..16).collect { int n -> Thread.startVirtualThread { 200.times { results << ms.getMessage('x', [n], 'valor {0}', null) } } }*.join()
         assert results.size() == 3200 && results.every { it ==~ /valor \d+/ }
     }
+
+    @Test
+    void 'sessoes em memoria limitadas: saem as acessadas ha mais tempo'() {
+        def repo = new org.grox.session.MemorySessionRepository('SESSION', 1800, 1000)
+        try {
+            def usuario = repo.create()
+            repo.save(usuario)
+            // um robô cria uma sessão por requisição; o usuário continua usando a dele
+            3000.times { int i ->
+                repo.save(repo.create())
+                if (i % 100 == 0) {
+                    Thread.sleep(1)
+                    repo.find(usuario.id)
+                }
+            }
+            assert repo.size() <= 1000   // antes: 3001, sem limite
+            assert repo.find(usuario.id) != null
+            assert new org.grox.session.MemorySessionRepository('S', 1800, 0).with { r ->
+                try { 50.times { r.save(r.create()) }; r.size() == 50 } finally { r.close() }
+            }
+        } finally {
+            repo.close()
+        }
+    }
 }
