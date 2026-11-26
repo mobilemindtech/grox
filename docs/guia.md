@@ -1252,6 +1252,7 @@ class BootStrap {
 ## Subida rápida
 
 - **Desenvolvimento:** o `gradle run` usa JIT só C1 (`-XX:TieredStopAtLevel=1`), o que acelera a subida de 25% a 40%. Desligue com `grox { fastDevStartup = false }` no `build.gradle`, por exemplo para medir desempenho.
+- **JVM e memória:** opções por `JAVA_OPTS` (ou `<APP>_OPTS`) e `applicationDefaultJvmArgs`; heap de referência, limites de metaspace/code cache/memória direta em contêiner e GC estão no livro (Implantação → JVM e memória), com base na medição de `docs/benchmark.md`.
 - **Produção (JDK 25+):** `./gradlew installDist aotCache` faz uma execução de treino da aplicação instalada. A app sobe, encerra ao ficar pronta e deixa o AOT cache em `build/install/<app>/lib/grox.aot`.
   - O script `bin/<app>` usa o cache quando o arquivo existe.
   - O treino usa a configuração do ambiente (inclusive o banco), então rode com as mesmas variáveis de produção.

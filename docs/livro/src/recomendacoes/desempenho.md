@@ -86,6 +86,7 @@ Com o CSRF ativo (o padrão), o `<g:form>` grava o token na sessão. Numa págin
 
 - **Desenvolvimento:** `gradle run` usa JIT só C1 (`grox { fastDevStartup = true }`), de 25% a 40% mais rápido. O Hibernate sobe em paralelo com o resto (`grox.startup.parallel`).
 - **Produção:** `./gradlew installDist aotCache` gera o AOT cache do JDK. No sample-app, a subida caiu de 12 s para 5 a 8 s.
+- **Memória:** o Grox usa cerca de 2/3 da memória do Grails na mesma app. Heap, limites em contêiner e GC estão em [JVM e memória](implantacao.md#jvm-e-memória).
 - O log mostra o tempo de cada fase (`Subida por fase`); os mesmos valores ficam em `groxRuntime.startupPhases`.
 
 ## Código da aplicação

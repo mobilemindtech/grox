@@ -233,6 +233,7 @@ Iniciada em 2026-10-10 em `docs/livro/` (`docs/livro/build.sh` gera e confere li
 - [x] Referência de configuração: todas as chaves (Grox, `grails.plugin.springsecurity.*`, `grails.gorm.multiTenancy.*`, sessão, Redis, assets...) com padrões e exemplos
 - [x] Guias por recurso (controllers, GORM, GSP/SiteMesh, segurança, multi-tenancy, services-ator, plugins reimplementados, recarga)
 - [x] Recomendações (desempenho, implantação, segurança), FAQ e solução de problemas
+- [x] JVM e memória na implantação (2026-11-26): onde passar as opções, heap e RSS de referência, limites em contêiner, GC e como medir
 - [x] Exemplos completos e build do livro (`build.sh`; tutorial da livraria na trilha sem Grails)
 - [ ] Revisão do livro por um leitor novo (seguir o início rápido e o tutorial do zero) e exemplos do livro compilados num teste
 - [ ] Lacunas achadas ao escrever o livro, nas apps do `grox-dsl`: dados iniciais sem `BootStrap`, `grox.gsp.viewsDir` padrão `grails-app/views` (sem reload de views), binding de objeto em `@Handler` sem `validate()`/JSON, `grox.serverURL` separado de `grails.serverURL`
