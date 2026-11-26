@@ -19,17 +19,20 @@ class ScaffoldViews {
     static final String APP_TEMPLATES = 'templates/scaffolding/'
     static final String DEFAULT_TEMPLATES = 'org/grox/web/scaffolding/templates/'
 
-    /** Domain do scaffold de cada controller (ou {@link #NONE}). */
-    private static final Map<Class<?>, Object> DOMAINS = new ConcurrentHashMap<>()
     private static final Object NONE = new Object()
+    /** Domain do scaffold de cada controller (ou {@link #NONE}), guardada na classe: a recarga não prende gerações antigas. */
+    private static final ClassValue<Object> DOMAINS = new ClassValue<Object>() {
+        @Override
+        protected Object computeValue(Class<?> c) {
+            Object s = ClassUtils.staticProperty(c, 'scaffold')
+            s instanceof Class ? s : NONE
+        }
+    }
 
     /** A domain de {@code static scaffold = X}, ou null. */
     static Class<?> domainOf(Class<?> controller) {
         if (controller == null) return null
-        Object d = DOMAINS.computeIfAbsent(controller) { Class<?> c ->
-            Object s = ClassUtils.staticProperty(c, 'scaffold')
-            s instanceof Class ? s : NONE
-        }
+        Object d = DOMAINS.get(controller)
         d.is(NONE) ? null : (Class<?>) d
     }
 

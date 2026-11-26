@@ -110,6 +110,7 @@ rabbitMessagePublisher.send('fila', 'texto')
 ```
 
 - Sem o broker, a aplicação sobe e o envio falha. `rabbitmq.enabled: false` desliga.
+- Cada envio usa um canal só seu, emprestado de um pool pequeno por conexão (até 16 ociosos), sem abrir e fechar um canal por mensagem. Um canal com erro é descartado.
 - `ssl: true` valida o certificado pelo truststore da JVM (`-Djavax.net.ssl.trustStore=...`) e o nome do host. O plugin original confiava em qualquer certificado.
 - Não existem ainda: consumers (`grails-app/rabbit-consumers`, `static rabbitConfig`), RPC e confirms.
 - `static rabbitQueue` em services é do plugin rabbitmq antigo: o rabbitmq-native o ignora, e o Grox também (com aviso no log).

@@ -26,10 +26,30 @@ abstract class GspPage extends Script {
         rc.out.write(texts[index])
     }
 
+    /** A página é uma view {@code .md} ({@code ${}} escapa a pontuação do Markdown). */
+    boolean markdown
+
+    private static final String MARKDOWN_PUNCTUATION = '\\`*_{}[]()#+-.!|~'
+
+    /** Barra invertida antes da pontuação do Markdown: o commonmark a mostra como texto. */
+    @CompileStatic
+    static String escapeMarkdown(String s) {
+        StringBuilder sb = null
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i)
+            if (MARKDOWN_PUNCTUATION.indexOf((int) c) >= 0) {
+                if (sb == null) sb = new StringBuilder(s.length() + 8).append(s, 0, i)
+                sb.append((char) '\\')
+            }
+            if (sb != null) sb.append(c)
+        }
+        sb == null ? s : sb.toString()
+    }
+
     @CompileStatic
     void printEncoded(Object value) {
         // o Html.escape não codifica de novo o que um encodeAs* devolveu nesta requisição (como no Grails)
-        if (value != null) rc.out.write(Html.escape(value))
+        if (value != null) rc.out.write(markdown && !(value instanceof SafeHtml) ? Html.escape(escapeMarkdown(value.toString())) : Html.escape(value))
     }
 
     @CompileStatic

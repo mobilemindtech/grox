@@ -81,7 +81,7 @@ class StaticResources implements ResourceHandler {
         }
         String ext = rel.contains('.') ? rel.substring(rel.lastIndexOf('.') + 1).toLowerCase() : ''
         resp.contentType = MIME[ext] ?: 'application/octet-stream'
-        resp.outputStream.write(bytes)
+        resp.body = bytes   // o array do cache, sem cópia
         resp
     }
 }

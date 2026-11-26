@@ -20,7 +20,6 @@ class GroovyExpressionHandler extends AbstractExpressionHandler {
 
     private final GroovyClassLoader loader
     private final Map<String, Class<? extends Script>> scripts = new ConcurrentHashMap<>()
-    private volatile boolean cache = true
     /** Valor já avaliado de uma expressão, entregue uma vez ao pug4j (o {@link TagLibCompiler} avalia antes dele). */
     private final ThreadLocal<Object[]> preset = new ThreadLocal<>()
 
@@ -77,10 +76,13 @@ class GroovyExpressionHandler extends AbstractExpressionHandler {
         }
     }
 
+    /**
+     * As expressões compiladas ficam em cache também com o reload: a chave é o texto, e um template alterado gera
+     * chaves novas. Desligar o cache recompilaria cada {@code #{}} a cada item de um {@code each} (1,7 s contra
+     * 52 ms numa lista de 100). O reload dos templates é do pug4j ({@code caching}).
+     */
     @Override
     void setCache(boolean cache) {
-        this.cache = cache
-        if (!cache) scripts.clear()
     }
 
     @Override
@@ -90,7 +92,6 @@ class GroovyExpressionHandler extends AbstractExpressionHandler {
 
     private Class<? extends Script> compile(String expression) {
         String source = withoutDeclaration(expression)
-        if (!cache) return parse(source)
         scripts.computeIfAbsent(source) { String s -> parse(s) }
     }
 

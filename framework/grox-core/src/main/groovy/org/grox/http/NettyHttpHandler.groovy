@@ -206,13 +206,14 @@ class NettyHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
     }
 
     static FullHttpResponse toNetty(GroxResponse r, boolean head) {
-        byte[] body = r.toBytes()
+        // o array do corpo embrulhado direto (antes: toByteArray, uma cópia a mais por resposta)
+        int length = r.size()
         def out = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.valueOf(r.status),
-                head || body.length == 0 ? Unpooled.EMPTY_BUFFER : Unpooled.wrappedBuffer(body))
+                head || length == 0 ? Unpooled.EMPTY_BUFFER : Unpooled.wrappedBuffer(r.bodyArray(), 0, length))
         r.headers.each { String k, List<String> vs -> out.headers().add(k, vs) }
         String ct = r.contentTypeHeader
         if (ct && !out.headers().contains(HttpHeaderNames.CONTENT_TYPE)) out.headers().set(HttpHeaderNames.CONTENT_TYPE, ct)
-        HttpUtil.setContentLength(out, body.length)
+        HttpUtil.setContentLength(out, length)
         out
     }
 

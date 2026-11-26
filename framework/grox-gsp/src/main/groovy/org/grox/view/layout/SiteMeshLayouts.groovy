@@ -59,6 +59,20 @@ class SiteMeshLayouts {
         sw.toString()
     }
 
+    private static final Object NO_LAYOUT = new Object()
+    /** {@code static layout} de cada controller, lido por reflexão uma vez (antes, em toda resposta HTML). */
+    private static final ClassValue<Object> STATIC_LAYOUT_VALUE = new ClassValue<Object>() {
+        @Override
+        protected Object computeValue(Class<?> type) {
+            ClassUtils.staticProperty(type, 'layout') ?: NO_LAYOUT
+        }
+    }
+
+    static Object staticLayout(Class<?> controller) {
+        Object v = STATIC_LAYOUT_VALUE.get(controller)
+        v.is(NO_LAYOUT) ? null : v
+    }
+
     String findLayout(Content content, ViewRequest wr) {
         List<String> candidates = []
         String meta = property(content, 'meta.layout')
@@ -66,7 +80,7 @@ class SiteMeshLayouts {
             candidates << meta
         } else {
             if (wr?.controllerClass != null) {
-                Object st = ClassUtils.staticProperty(wr.controllerClass, 'layout')
+                Object st = staticLayout(wr.controllerClass)
                 if (st) candidates << st.toString()
                 candidates << "${wr.controllerName}/${wr.actionName}".toString()
                 candidates << wr.controllerName

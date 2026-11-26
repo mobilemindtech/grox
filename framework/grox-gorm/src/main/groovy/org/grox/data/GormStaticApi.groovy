@@ -46,12 +46,39 @@ class GormStaticApi {
         key == null ? null : Persistence.withSession { Session s -> guard(s); s.getReference(type, key) }
     }
 
+    /** Um {@code count} pelo id, sem carregar a entidade (nem as associações EAGER), como no GORM. */
     boolean exists(Object id) {
-        get(id) != null
+        if (domain.composite) return get(id) != null
+        Object key = convertId(id)
+        if (key == null) return false
+        Persistence.withSession { Session s ->
+            guard(s)
+            def cb = s.criteriaBuilder
+            def q = cb.createQuery(Long)
+            def root = q.from(type)
+            q.select(cb.count(root)).where(cb.equal(root.get(domain.identity.name), key))
+            s.createQuery(q).singleResult > 0
+        }
     }
 
+    /** Uma consulta ({@code id in (...)}) na ordem dos ids, com {@code null} para os inexistentes, como no GORM. */
     List getAll(Collection ids) {
-        ids.collect { get(it) }
+        if (!ids) return []
+        if (domain.composite) return ids.collect { get(it) }
+        List keys = ids.collect { convertId(it) }
+        List distinct = keys.findAll { it != null }.unique()
+        Map<Object, Object> byId = [:]
+        if (distinct) {
+            Persistence.withSession { Session s ->
+                guard(s)
+                def cb = s.criteriaBuilder
+                def q = cb.createQuery(type)
+                def root = q.from(type)
+                q.select(root).where(root.get(domain.identity.name).in(distinct))
+                s.createQuery(q).resultList.each { byId[domain.identity.get(it)] = it }
+            }
+        }
+        keys.collect { it == null ? null : byId[it] }
     }
 
     /** Com {@code max}, um {@code PagedResultList} ({@code totalCount}), como no GORM. */

@@ -24,6 +24,16 @@ class GspTemplateEngine {
         String view
 
         String getView() { view ?: path + '.gsp' }
+        /** View {@code .md}: o {@code ${}} escapa também a pontuação do Markdown (links e imagens não são injetados). */
+        boolean markdown
+
+        private java.lang.reflect.Constructor<? extends GspPage> constructor
+
+        /** Uma página nova (o construtor é buscado por reflexão uma vez só, não a cada view ou item de g:render). */
+        GspPage newPage() {
+            if (constructor == null) constructor = type.getDeclaredConstructor()
+            constructor.newInstance()
+        }
 
         boolean isStale() {
             source.file != null && source.lastModified != lastModified
@@ -180,9 +190,10 @@ class GspTemplateEngine {
     }
 
     void render(CompiledGsp c, Map model, GspRenderContext rc) {
-        GspPage page = c.type.getDeclaredConstructor().newInstance()
+        GspPage page = c.newPage()
         page.texts = c.texts
         page.viewPath = c.path
+        page.markdown = c.markdown
         page.rc = rc
         page.binding = new GspBinding(model, rc, rc.currentBinding)
         if (c.contentType && rc.webRequest != null) rc.webRequest.response.contentType = c.contentType

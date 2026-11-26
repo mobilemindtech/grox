@@ -48,6 +48,7 @@ class MarkdownViews implements ViewEngine {
         def src = locator.find(path, 'md')
         if (src == null) throw new FileNotFoundException("view Markdown não encontrada: ${path}.md")
         c = gsp.compile(path, src, path + '.md')
+        c.markdown = true
         cache.put(path, c)
         c
     }

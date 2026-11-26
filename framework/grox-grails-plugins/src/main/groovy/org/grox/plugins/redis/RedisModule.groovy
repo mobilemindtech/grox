@@ -17,6 +17,7 @@ class RedisModule extends GroxModule {
 
     @Override
     void release(Shutdown shutdown) {
-        if (!shutdown.reload && shutdown.generation) RedisPlugin.close(redisBeans)
+        // também na recarga: cada geração cria os seus no contributeBeans (antes, os da anterior ficavam abertos)
+        if (shutdown.generation) RedisPlugin.close(redisBeans)
     }
 }

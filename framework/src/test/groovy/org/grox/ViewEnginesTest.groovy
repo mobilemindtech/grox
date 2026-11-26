@@ -111,6 +111,20 @@ p #{contador << 1; contador.size()}''')
     }
 
     @Test
+    void 'pug com reload: as expressoes compiladas ficam em cache'() {
+        write('pg/lista.pug', '''\
+each l in livros
+  p #{l.titulo} #{l.ano} #{l.ano > 1900}''')
+        def livros = (1..100).collect { [titulo: "L${it}", ano: 1850 + it] }
+        assert render('/pg/lista', [livros: livros]).count('<p>') == 100
+        def scripts = (Map) pug.engine.expressionHandler.@scripts
+        int compiladas = scripts.size()
+        render('/pg/lista', [livros: livros])
+        // antes, com reload, cada #{} era recompilado a cada item (o cache ficava desligado)
+        assert compiladas > 0 && scripts.size() == compiladas
+    }
+
+    @Test
     void 'pug: extends, include, mixin e filtro markdown com HTML escapado'() {
         write('layouts/base.pug', 'html\n  body\n    block conteudo\n')
         write('pg/_menu.pug', 'nav menu\n')
@@ -168,6 +182,24 @@ Valor: **${n}** e ${html} <t:upper texto="x"/>
         String html = render('/gs/pagina', [texto: 'a <script>b</script>'])
         assert html == '<div class="card">1</div><div class="card">2</div>|<p><strong>9</strong></p>\n|<p>a &lt;script&gt;b&lt;/script&gt;</p>\n|<p><em>ok</em> <u>u</u></p>\n'
         assert views.exists('/gs/card') == false && views.exists('/gs/_card') && views.exists('/gs/pagina')
+    }
+
+    @Test
+    void 'markdown: o ${} escapa a sintaxe do Markdown, nao so o HTML'() {
+        write('md/dados.md', '''\
+# Recado de ${autor}
+
+${texto}
+
+**${nome}** escreveu.''')
+        String html = render('/md/_dados'.replace('_', ''), [autor: 'Ana_Lu', nome: '*Bia*',
+                texto: '[clique](https://evil.example) ![](https://evil.example/t.png) <b>x</b> 1. item'])
+        // antes: link com outro texto e imagem de verdade (phishing, pixel de rastreio)
+        assert !html.contains('<img') && !html.contains('>clique</a>')
+        assert html.contains('[clique](') && html.contains('&lt;b&gt;x&lt;/b&gt;') && html.contains('1. item')
+        // uma URL solta continua virando link pelo autolink, com o endereço visível e rel=nofollow
+        assert html.contains('<a rel="nofollow" href="https://evil.example">https://evil.example</a>')
+        assert html.contains('>Recado de Ana_Lu</h1>') && html.contains('<strong>*Bia*</strong>')
     }
 
     @Test

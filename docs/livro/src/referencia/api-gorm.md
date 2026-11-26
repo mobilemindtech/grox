@@ -11,8 +11,8 @@ Todos os métodos que as domain classes ganham. As classes de `grails-app/domain
 | `get(id)` | instância ou `null` | Id convertido para o tipo da chave |
 | `read(id)` | instância ou `null` | Somente leitura |
 | `load(id)` | proxy ou instância | Proxy lazy só nas entidades alvo de many-to-one (`grox.data.proxies: auto`) |
-| `exists(id)` | `boolean` | |
-| `getAll([ids])` | `List` | Na ordem dos ids |
+| `exists(id)` | `boolean` | Um `count` pelo id, sem carregar a entidade |
+| `getAll([ids])` | `List` | Uma consulta só; na ordem dos ids, com `null` para os inexistentes |
 | `list()`, `list(max:, offset:, sort:, order:)` | `List` | Com `max`, devolve `PagedResultList` (`totalCount`) |
 | `count()` | `long` | |
 | `first()`, `first('prop')`, `first(sort:, ...)` | instância | Pelo id, ou pela propriedade |

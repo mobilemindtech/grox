@@ -3,13 +3,19 @@ package org.grox.core
 import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 
-import java.util.concurrent.ConcurrentHashMap
-
-/** Loggers por classe em cache (a propriedade {@code log} dos artefatos é lida com frequência). */
+/**
+ * Loggers por classe em cache (a propriedade {@code log} dos artefatos é lida com frequência). {@link ClassValue}
+ * em vez de um mapa estático: o logger fica na própria classe, e a recarga não prende as gerações antigas.
+ */
 class Logs {
-    private static final Map<Class, Logger> CACHE = new ConcurrentHashMap<>()
+    private static final ClassValue<Logger> CACHE = new ClassValue<Logger>() {
+        @Override
+        protected Logger computeValue(Class<?> type) {
+            LoggerFactory.getLogger(type)
+        }
+    }
 
     static Logger of(Class<?> type) {
-        CACHE.computeIfAbsent(type) { LoggerFactory.getLogger(it) }
+        CACHE.get(type)
     }
 }

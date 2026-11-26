@@ -29,6 +29,8 @@ class UrlMapping {
     Map<String, Object> attrs = [:]
     String httpMethod
     Map<String, Map> constraints = [:]
+    /** {@code matches} das constraints, compiladas no primeiro casamento (o match roda em todos os mapeamentos). */
+    private volatile Map<String, Pattern> constraintPatterns
     Integer statusCode
     int order
     int literalWeight
@@ -118,10 +120,20 @@ class UrlMapping {
             String g = mt.group(i + 1)
             if (g != null) vars[varNames[i]] = g
         }
-        for (Map.Entry<String, Map> c : constraints.entrySet()) {
-            Object rule = c.value?.matches
-            String value = vars[c.key]
-            if (rule != null && value != null && !(value ==~ rule.toString())) return null
+        if (!constraints.isEmpty()) {
+            Map<String, Pattern> patterns = constraintPatterns
+            if (patterns == null) {
+                patterns = [:]
+                for (Map.Entry<String, Map> c : constraints.entrySet()) {
+                    Object rule = c.value?.matches
+                    if (rule != null) patterns[c.key] = rule instanceof Pattern ? (Pattern) rule : Pattern.compile(rule.toString())
+                }
+                constraintPatterns = patterns
+            }
+            for (Map.Entry<String, Pattern> p : patterns.entrySet()) {
+                String value = vars[p.key]
+                if (value != null && !p.value.matcher(value).matches()) return null
+            }
         }
         vars
     }

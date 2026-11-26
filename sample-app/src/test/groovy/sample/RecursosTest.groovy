@@ -92,6 +92,14 @@ class RecursosTest {
     }
 
     @Test
+    void 'render file com InputStream fecha o stream'() {
+        def r = admin.page('/home/arquivo')
+        assert r.status() == 200 && r.body() == 'conteudo do arquivo'
+        assert r.headers().firstValue('Content-Disposition').get().contains('attachment')
+        assert app.webContext.controllers['home'].type.arquivoFechado   // antes: ficava aberto até o GC
+    }
+
+    @Test
     void 'afterView roda tambem quando a action ou a promessa falha, com o throwable'() {
         def auditoria = app.webContext.interceptors.interceptors.find { it.getClass().simpleName == 'AuditoriaInterceptor' }
         admin.page('/')

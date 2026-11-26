@@ -71,10 +71,16 @@ class ControllerSupport {
     private static void renderFile(WebRequest wr, Map args) {
         GroxResponse resp = wr.response
         Object f = args.file
-        byte[] bytes = f instanceof byte[] ? (byte[]) f : f instanceof File ? ((File) f).bytes : ((InputStream) f).bytes
         if (!resp.contentType) resp.contentType = 'application/octet-stream'
         if (args.fileName) resp.setHeader('Content-Disposition', contentDisposition(args.fileName.toString()))
-        resp.outputStream.write(bytes)
+        if (f instanceof byte[]) {
+            resp.body = (byte[]) f
+        } else if (f instanceof File) {
+            resp.body = ((File) f).bytes
+        } else {
+            // o stream é fechado aqui, como no Grails (antes ficava aberto até o GC)
+            ((InputStream) f).withCloseable { InputStream input -> input.transferTo(resp.outputStream) }
+        }
         resp.committed = true
     }
 

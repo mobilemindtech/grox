@@ -405,6 +405,20 @@ class GormTest {
     }
 
     @Test
+    void 'getAll numa consulta so, na ordem dos ids, e exists sem carregar a entidade'() {
+        def ids = ['Aa', 'Bb', 'Cc'].collect { new Autor(nome: it).save(failOnError: true, flush: true).id }
+        def stats = datastore.sessionFactory.statistics
+        stats.clear()
+        def lista = Autor.getAll([ids[2], -1L, ids[0], ids[2].toString(), null])
+        assert lista*.nome == ['Cc', null, 'Aa', 'Cc', null]
+        assert stats.prepareStatementCount == 1   // antes: uma consulta por id
+        stats.clear()
+        assert Autor.exists(ids[1]) && !Autor.exists(-1L) && !Autor.exists('abc') && !Autor.exists(null)
+        assert stats.entityLoadCount == 0         // antes: carregava a entidade inteira
+        assert Autor.getAll([]) == []
+    }
+
+    @Test
     void 'sort por associacao usa left join e sort invalido de params e ignorado'() {
         Livro.withTransaction {
             def a = new org.grox.testdomain.Carro(modelo: 'ordem-a')

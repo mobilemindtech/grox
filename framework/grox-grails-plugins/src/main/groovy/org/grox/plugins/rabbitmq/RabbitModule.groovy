@@ -30,6 +30,7 @@ class RabbitModule extends GroxModule {
 
     @Override
     void release(Shutdown shutdown) {
-        if (!shutdown.reload && shutdown.generation) rabbit?.close()
+        // também na recarga: cada geração cria os seus no contributeBeans (antes, os da anterior ficavam abertos)
+        if (shutdown.generation) rabbit?.close()
     }
 }

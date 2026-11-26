@@ -15,6 +15,29 @@ import java.nio.charset.StandardCharsets
 class RabbitPluginTest {
 
     @Test
+    void 'publisher reaproveita os canais da conexao e descarta o que falhou'() {
+        int abertos = 0, fechados = 0
+        boolean falhar = false
+        Closure<Object> novoCanal = { ->
+            abertos++
+            boolean aberto = true
+            [basicPublish: { String ex, String rk, AMQP.BasicProperties props, byte[] body -> if (falhar) throw new IOException('canal fechado pelo broker') },
+             isOpen: { aberto }, close: { aberto = false; fechados++ }] as Channel
+        }
+        def conexao = new Expando(createChannel: novoCanal)
+        def publisher = new RabbitPublisher([default: conexao], 'default')
+        20.times { publisher.send('fila', 'm' + it) }
+        assert abertos == 1 && fechados == 0   // antes: 20 canais abertos e fechados (duas idas ao broker cada)
+        // envios simultâneos usam canais diferentes (o Channel não é thread-safe)
+        List<Thread> ts = (1..8).collect { Thread.ofVirtual().start { 10.times { publisher.send('fila', 'x') } } }
+        ts*.join()
+        assert abertos <= 8
+        falhar = true
+        try { publisher.send('fila', 'erro') } catch (IOException ignored) {}
+        assert fechados == 1   // o canal com erro não volta ao pool
+    }
+
+    @Test
     void 'publisher converte o corpo e repassa as propriedades'() {
         List enviados = []
         def channel = [basicPublish: { String ex, String rk, AMQP.BasicProperties props, byte[] body -> enviados << [ex, rk, props, body] }] as Channel

@@ -45,11 +45,18 @@ abstract class PatchTask extends DefaultTask {
     @Inject
     abstract ExecOperations getExec()
 
-    /** Os arquivos de um patch ({@code +++ b/caminho}), sem o primeiro componente. */
+    /**
+     * Os arquivos de um patch ({@code +++ b/caminho}), sem o primeiro componente. Caminho absoluto ou com {@code ..}
+     * é recusado: a cópia para {@code build/grox-patched} sairia do diretório (antes do próprio {@code patch} recusá-lo).
+     */
     static List<String> targets(File patch) {
         patch.readLines('UTF-8').findAll { it.startsWith('+++ ') }.collect { String line ->
             String name = line.substring(4).split('\t')[0].trim()
-            name.substring(name.indexOf('/') + 1)
+            String path = name.substring(name.indexOf('/') + 1)
+            if (path.startsWith('/') || path ==~ /^[A-Za-z]:.*/ || path.split('[/\\\\]').contains('..')) {
+                throw new GradleException("Patch ${patch.name}: caminho fora do projeto: ${name}")
+            }
+            path
         }.unique()
     }
 
@@ -60,6 +67,9 @@ abstract class PatchTask extends DefaultTask {
         out.mkdirs()
         [paths.get(), sources.get()].transpose().each { String path, String original ->
             File copy = new File(out, path)
+            if (!copy.canonicalPath.startsWith(out.canonicalPath + File.separator)) {
+                throw new GradleException("Patch: caminho fora de ${out}: ${path}")
+            }
             copy.parentFile.mkdirs()
             copy.bytes = new File(original).bytes
         }

@@ -169,17 +169,17 @@ Revisão do framework inteiro (a modularização moveu todos os fontes desde a d
 - [x] Pug: `#{tag(...)}` escapa de novo o `SafeHtml` das tags
 - [x] `@ReadOnly` faz flush das alterações (FlushMode MANUAL)
 
-**Prioridade 4 (desempenho e manutenção):**
-- [ ] Recarga: pools do Redis e conexões do RabbitMQ das gerações antigas não são fechados; `Logs.CACHE` e `ScaffoldViews.DOMAINS` retêm os classloaders
-- [ ] Pug em desenvolvimento recompila cada expressão (1,7 s contra 52 ms numa lista de 100)
-- [ ] Corpo da resposta copiado 2 a 3 vezes (`GroxResponse`, `NettyHttpHandler`, estáticos)
-- [ ] Reflexão por requisição: `layout` estático do controller e construtor da GSP
-- [ ] Regex das `constraints` de URL compilada a cada casamento
-- [ ] `getAll(ids)` com uma consulta por id; `exists(id)` carrega a entidade
-- [ ] `RabbitPublisher` abre e fecha um canal por mensagem
-- [ ] Views `.md`: o `${}` não escapa a sintaxe Markdown (links e imagens injetados)
-- [ ] `render(file: InputStream)` não fecha o stream
-- [ ] `PatchTask` do plugin Gradle aceita `..` nos caminhos dos patches
+**Prioridade 4 (desempenho e manutenção, feito):**
+- [x] Recarga: pools do Redis e conexões do RabbitMQ das gerações antigas não são fechados; `Logs.CACHE` e `ScaffoldViews.DOMAINS` retêm os classloaders
+- [x] Pug em desenvolvimento recompila cada expressão (1,7 s contra 52 ms numa lista de 100)
+- [x] Corpo da resposta copiado 2 a 3 vezes (`GroxResponse`, `NettyHttpHandler`, estáticos)
+- [x] Reflexão por requisição: `layout` estático do controller e construtor da GSP
+- [x] Regex das `constraints` de URL compilada a cada casamento
+- [x] `getAll(ids)` com uma consulta por id; `exists(id)` carrega a entidade
+- [x] `RabbitPublisher` abre e fecha um canal por mensagem
+- [x] Views `.md`: o `${}` não escapa a sintaxe Markdown (links e imagens injetados)
+- [x] `render(file: InputStream)` não fecha o stream
+- [x] `PatchTask` do plugin Gradle aceita `..` nos caminhos dos patches
 
 ## Migração de apps reais
 

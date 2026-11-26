@@ -6,12 +6,19 @@ import groovy.json.JsonOutput
 
 import java.nio.charset.StandardCharsets
 
-/** Implementação do {@link RabbitMessagePublisher}: um canal por envio (o Channel do amqp-client não é thread-safe). */
+/**
+ * Implementação do {@link RabbitMessagePublisher}. O Channel do amqp-client não é thread-safe: cada envio pega um
+ * canal só seu de um pool pequeno por conexão e o devolve no fim (abrir e fechar um canal são duas idas ao broker).
+ */
 class RabbitPublisher implements RabbitMessagePublisher {
+
+    /** Canais ociosos guardados por conexão; os excedentes são fechados. */
+    static final int MAX_IDLE_CHANNELS = 16
 
     /** Conexões por nome; a primeira (ou a {@code isDefault}) é a padrão. */
     final Map<String, Object> connections
     final String defaultConnection
+    private final Map<String, java.util.concurrent.ConcurrentLinkedDeque<Object>> idle = new java.util.concurrent.ConcurrentHashMap<>()
 
     RabbitPublisher(Map<String, Object> connections, String defaultConnection) {
         this.connections = connections
@@ -41,13 +48,21 @@ class RabbitPublisher implements RabbitMessagePublisher {
             p.channel.basicPublish(p.exchange ?: '', p.routingKey ?: '', props, (byte[]) converted[0])
             return
         }
-        def connection = connections[p.connection ?: defaultConnection]
-        if (connection == null) throw new IllegalStateException("Conexão rabbitmq '${p.connection ?: defaultConnection}' inexistente ou indisponível")
-        def channel = connection.createChannel()
+        String name = p.connection ?: defaultConnection
+        def connection = connections[name]
+        if (connection == null) throw new IllegalStateException("Conexão rabbitmq '${name}' inexistente ou indisponível")
+        def pool = idle.computeIfAbsent(name) { new java.util.concurrent.ConcurrentLinkedDeque<Object>() }
+        def channel = pool.pollFirst()
+        while (channel != null && !channel.open) channel = pool.pollFirst()
+        if (channel == null) channel = connection.createChannel()
+        boolean published = false
         try {
             channel.basicPublish(p.exchange ?: '', p.routingKey ?: '', props, (byte[]) converted[0])
+            published = true
         } finally {
-            if (channel.open) channel.close()
+            // canal com erro não volta ao pool (o broker pode tê-lo fechado)
+            if (published && channel.open && pool.size() < MAX_IDLE_CHANNELS) pool.addFirst(channel)
+            else if (channel.open) channel.close()
         }
     }
 

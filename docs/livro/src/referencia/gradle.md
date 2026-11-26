@@ -55,7 +55,7 @@ Aplica os plugins `groovy` e `application` e:
 | `fastDevStartup` | `true` | `run` com `-XX:TieredStopAtLevel=1` (JIT só C1): sobe de 25% a 40% mais rápido. Desligue para medir desempenho |
 | `reload` | `true` | `run` com recarga de classes em development (passa as propriedades `grox.reload.*` à app) |
 | `source(dir) { include/exclude }` | nenhuma | Raiz de código fora do projeto, com o layout do Grails (`grails-app/` e `src/main/`); padrões relativos à raiz. Um arquivo de mesmo caminho numa raiz posterior (que os padrões dela aceitem) ou no projeto substitui o da raiz. Também no `org.grox.lib` *(extensão Grox)*. Ver [Build paralelo](../migracao/build-paralelo.md) |
-| `patches` | vazio | Diffs unificados (arquivos ou diretórios de `*.patch`, caminhos relativos à raiz) aplicados a cópias em `build/grox-patched`. Também no `org.grox.lib` *(extensão Grox)* |
+| `patches` | vazio | Diffs unificados (arquivos ou diretórios de `*.patch`, caminhos relativos à raiz) aplicados a cópias em `build/grox-patched`. Caminho absoluto ou com `..` num patch falha o build. Também no `org.grox.lib` *(extensão Grox)* |
 
 ### Tarefas
 

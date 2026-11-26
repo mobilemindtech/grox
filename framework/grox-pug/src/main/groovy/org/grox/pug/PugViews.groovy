@@ -25,7 +25,6 @@ class PugViews implements ViewEngine {
         this.locator = locator
         this.prettyPrint = prettyPrint
         def handler = new GroovyExpressionHandler(loader)
-        handler.cache = !reload
         engine = PugEngine.builder()
                 .templateLoader(new ViewTemplateLoader(locator))
                 .expressionHandler(handler)

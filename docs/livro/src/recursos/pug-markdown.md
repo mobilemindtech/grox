@@ -108,7 +108,7 @@ O catálogo tem **${total} livros**. Veja a <g:link controller="livros">lista</g
 
 - **Front matter** (opcional, YAML entre `---`): `title` vira o `<title>` da página, `layout` escolhe o layout SiteMesh e as demais chaves viram `<meta name="chave">`, lidas no layout com `<g:pageProperty name="meta.descricao"/>`.
 - Extensões: tabelas e tachado do GFM, links automáticos e âncoras nos títulos (`# Ajuda` → `<h1 id="ajuda">`).
-- `${}` é escapado em HTML, como na GSP. HTML escrito no próprio `.md` passa como está.
+- `${}` é escapado em HTML, como na GSP, e também na sintaxe do Markdown: um dado com `[x](url)` ou `![](url)` aparece como texto, e não vira link nem imagem. Uma URL solta no dado ainda vira link pelo autolink (com o endereço visível e `rel="nofollow"`). HTML escrito no próprio `.md` passa como está.
 - Links `javascript:` e afins são neutralizados, e os links recebem `rel="nofollow"`.
 - Templates (`_nome.md`) saem sem o documento em volta, para `<g:render template>`.
 - Cuidado: como o arquivo é uma GSP, um `${...}` dentro de um bloco de código também é avaliado.

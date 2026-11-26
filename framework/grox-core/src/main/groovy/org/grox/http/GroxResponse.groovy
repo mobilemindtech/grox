@@ -15,7 +15,30 @@ class GroxResponse implements jakarta.servlet.http.HttpServletResponse {
     Integer errorStatus
     String errorMessage
 
-    private final ByteArrayOutputStream buffer = new ByteArrayOutputStream()
+    private final Buffer buffer = new Buffer()
+    /** Corpo pronto, sem cópia para o buffer (estático em cache, página escrita de uma vez); vai ao buffer se houver mais escrita. */
+    private byte[] fixedBody
+
+    /** O array interno do {@link ByteArrayOutputStream}: o Netty o embrulha sem a cópia do {@code toByteArray()}. */
+    private static class Buffer extends ByteArrayOutputStream {
+        byte[] array() { buf }
+    }
+
+    /** Leva o corpo pronto ao buffer antes de uma escrita que o complementa. */
+    private void materialize() {
+        if (fixedBody != null) {
+            byte[] b = fixedBody
+            fixedBody = null
+            buffer.write(b, 0, b.length)
+        }
+    }
+
+    /** Define o corpo inteiro sem copiá-lo (o array não deve ser alterado depois). */
+    void setBody(byte[] bytes) {
+        writer?.flush()
+        buffer.reset()
+        fixedBody = bytes
+    }
     private PrintWriter writer
     private boolean writerClosed
 
@@ -82,6 +105,7 @@ class GroxResponse implements jakarta.servlet.http.HttpServletResponse {
     }
 
     PrintWriter getWriter() {
+        materialize()
         if (writer == null) writer = new PrintWriter(new OutputStreamWriter(buffer, Charset.forName(characterEncoding)), false)
         writer
     }
@@ -92,6 +116,7 @@ class GroxResponse implements jakarta.servlet.http.HttpServletResponse {
 
     jakarta.servlet.ServletOutputStream getOutputStream() {
         writer?.flush()
+        materialize()
         if (outputStream == null) outputStream = new BufferStream(buffer)
         outputStream
     }
@@ -124,12 +149,13 @@ class GroxResponse implements jakarta.servlet.http.HttpServletResponse {
     /** A action já escreveu o corpo ({@code response.outputStream << bytes}, {@code response.writer}). */
     boolean hasBody() {
         writer?.flush()
-        buffer.size() > 0
+        buffer.size() > 0 || (fixedBody != null && fixedBody.length > 0)
     }
 
     void resetBuffer() {
         writer?.flush()
         buffer.reset()
+        fixedBody = null
         if (writerClosed) {
             writer = null
             writerClosed = false
@@ -235,18 +261,30 @@ class GroxResponse implements jakarta.servlet.http.HttpServletResponse {
         if (writerClosed) return
         writer?.flush()
         byte[] b = text.getBytes(Charset.forName(characterEncoding))
-        buffer.write(b, 0, b.length)
+        if (fixedBody == null && buffer.size() == 0) {
+            fixedBody = b   // a página inteira de uma vez: sem copiar para o buffer
+        } else {
+            materialize()
+            buffer.write(b, 0, b.length)
+        }
     }
 
     /** Tamanho do corpo em bytes, sem copiá-lo. */
     int size() {
         writer?.flush()
-        buffer.size()
+        fixedBody != null ? fixedBody.length : buffer.size()
     }
 
+    /** O corpo (uma cópia, se estiver no buffer). */
     byte[] toBytes() {
         writer?.flush()
-        buffer.toByteArray()
+        fixedBody != null ? fixedBody : buffer.toByteArray()
+    }
+
+    /** O array com o corpo, sem cópia: os primeiros {@link #size()} bytes (só para escrever a resposta). */
+    byte[] bodyArray() {
+        writer?.flush()
+        fixedBody != null ? fixedBody : buffer.array()
     }
 
     String getText() {

@@ -190,6 +190,20 @@ class HomeController {
         render text: "Painel de ${principal.username}", contentType: 'text/plain'
     }
 
+    /** O InputStream do render(file:) é fechado (os testes conferem). */
+    static volatile boolean arquivoFechado
+
+    def arquivo() {
+        def input = new ByteArrayInputStream('conteudo do arquivo'.bytes) {
+            @Override
+            void close() {
+                super.close()
+                HomeController.arquivoFechado = true
+            }
+        }
+        render file: input, fileName: 'relatório.txt', contentType: 'text/plain'
+    }
+
     /** Simula uma action demorada (usada no teste de desligamento gracioso). */
     def lento(Integer ms) {
         Thread.sleep(Math.min(ms ?: 500, 5000))
