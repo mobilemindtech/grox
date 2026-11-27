@@ -639,4 +639,29 @@ class GormTest {
             assert livroJson.autor == [id: a.id] && livroJson.situacao == 'ATIVO'
         }
     }
+
+    @Test
+    void 'construtor da domain chama os init dos traits direto, sem call site dinamico'() {
+        def calls = []
+        int indy = 0
+        def bytes = Autor.getResourceAsStream('Autor.class').bytes
+        new groovyjarjarasm.asm.ClassReader(bytes).accept(new groovyjarjarasm.asm.ClassVisitor(groovyjarjarasm.asm.Opcodes.ASM9) {
+            @Override
+            groovyjarjarasm.asm.MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] ex) {
+                if (name != '<init>' || desc != '()V') return null
+                new groovyjarjarasm.asm.MethodVisitor(groovyjarjarasm.asm.Opcodes.ASM9) {
+                    @Override
+                    void visitMethodInsn(int op, String owner, String n, String d, boolean itf) {
+                        if (n == '$init$') calls << owner.tokenize('/').last()
+                    }
+
+                    @Override
+                    void visitInvokeDynamicInsn(String n, String d, groovyjarjarasm.asm.Handle h, Object... args) { indy++ }
+                }
+            }
+        }, 0)
+        // antes: invokedynamic, que religava quando o Hibernate instanciava o proxy (subclasse) pelo mesmo construtor
+        assert calls.contains('GormEntity$Trait$Helper') && calls.contains('ValidationSupport$Trait$Helper') && indy == 0
+        assert new Autor(nome: 'Ana').nome == 'Ana' && new Autor().errors != null
+    }
 }

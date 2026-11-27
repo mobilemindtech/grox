@@ -9,7 +9,7 @@ Status: fases 1 a 4 concluídas: o framework está em subprojetos `framework/gro
 | Módulo | Conteúdo | Depende de |
 |---|---|---|
 | `grox-core` | Atores, Netty, http (`GroxRequest`/`GroxResponse`/`GroxParams` puros), sessão (memória/Redis), config, roteamento genérico, i18n, `ContextPropagation`, management, async, services-ator, recarga, SPI `GroxModule` | |
-| `grox-gorm` | `org.grox.data.*`, API do GORM (`grails.gorm.*`, `org.grails.datastore.*` menos `...multitenancy.web`, `org.grails.orm.*`), `grails.validation`, shims de transação/validação do Spring, binding (`org.grox.data.binding.DataBinder`), `WhereQueryTransformation` | core |
+| `grox-gorm` | `org.grox.data.*`, API do GORM (`grails.gorm.*`, `org.grails.datastore.*` menos `...multitenancy.web`, `org.grails.orm.*`), `grails.validation`, shims de transação/validação do Spring, binding (`org.grox.data.binding.DataBinder`), `WhereQueryTransformation`, `TraitInitTransformation` | core |
 | `grox-gsp` | Motor GSP, SiteMesh, `TagLibRegistry`, tags `g:` genéricas | core |
 | `grox-assets` | Asset pipeline | core |
 | `grox-security` | Motor de segurança (filtro, regras, JWT, CSRF, bcrypt) e os pontos de extensão (`PasswordCodec`, `SecurityListener`, `AccessRuleSource`, `TokenStore`), sem os nomes do Grails/Spring (exceto as interfaces `Authentication` e `GrantedAuthority`, ver decisões) | core |

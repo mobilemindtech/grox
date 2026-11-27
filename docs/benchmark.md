@@ -128,9 +128,10 @@ No perfil da `/usuario/index` (1 conexão), 4,5% das amostras estavam em `IndyIn
 | Antes | religação 4,5%; `DomainEventBridge` 2,4% |
 | `ServiceProxies` e `DomainEventBridge` em `@CompileStatic` | religação 2,8%; `DomainEventBridge` 0% |
 | Execução do `DetachedCriteria` (`list`, `count`, `find`...) em `@CompileStatic` | religação 1,2% (só o construtor das domains) |
+| `$init$` dos traits com chamada direta no construtor das domains (`TraitInitTransformation`, 2026-11-27) | religação 0,1% (antes 1,4% na mesma rodada, % de todas as amostras) |
 
 - Medido pela fatia no JFR, e não pela vazão: nesta máquina (área de trabalho, redução de frequência da CPU), a vazão variou mais que o efeito entre rodadas iguais.
-- Falta o construtor das domains (`Grupo.<init>`, 1,2%): as chamadas `$init$` dos traits `GormEntity` e `ValidationSupport` ficam no construtor da domain, que é dinâmico (código da app). A AST poderia compilar estaticamente o construtor sem argumentos que ela gera.
+- Construtor das domains: as chamadas `$init$` dos traits `GormEntity` e `ValidationSupport` ficam no construtor da domain, que é dinâmico (código da app), e eram `invokedynamic` guardados pelo tipo de `this`. A `TraitInitTransformation` (global, em `INSTRUCTION_SELECTION`, depois da composição dos traits) liga essas chamadas ao método do helper, e o Groovy emite `invokestatic`; o resto do construtor continua dinâmico. A/B na mesma máquina ocupada: `IndyInterface.fallback` de 62 para 4 amostras em 4,5 mil; CPU de 9,5 para 8,7 ms por requisição (a máquina estava ocupada, então a CPU é só indicativa).
 
 ## HQL gerado no lugar da JPA Criteria (2026-11-26)
 

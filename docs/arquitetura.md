@@ -123,7 +123,7 @@ Transação e tenant dos services (`@Transactional`, `@ReadOnly`, `@WithoutTenan
    - `grails-app/controllers/*Interceptor` ganha o trait `InterceptorApi` (e as constantes de `Ordered`).
    - `grails-app/domain/*` ganha o trait `GormEntity`, `id`/`version`/`tenantId`, as associações e os construtores.
 
-   Uma segunda transformação global, `WhereQueryTransformation`, reescreve os closures de `where`/`whereAny`/`find`/`findAll` em **qualquer** código (controllers, services, testes) para montar critérios (`org.grox.data.query.Where`). A domain class é reconhecida pela interface `GormEntity` ou pelo diretório `grails-app/domain`.
+   Uma segunda transformação global, `WhereQueryTransformation`, reescreve os closures de `where`/`whereAny`/`find`/`findAll` em **qualquer** código (controllers, services, testes) para montar critérios (`org.grox.data.query.Where`). A domain class é reconhecida pela interface `GormEntity` ou pelo diretório `grails-app/domain`. Uma terceira, `TraitInitTransformation` (em `INSTRUCTION_SELECTION`), troca as chamadas `$init$` dos traits do Grox no construtor das domains por chamadas diretas (sem call site dinâmico que religa quando o Hibernate instancia o proxy).
 
    Cada transformação é registrada no `META-INF/services/org.codehaus.groovy.transform.ASTTransformation` do seu módulo (`grox-grails` e `grox-gorm`) e vale para qualquer projeto que tenha o módulo no classpath de compilação. Os próprios módulos do framework compilam sem elas (`framework/gradle/compilador-modulos.groovy`).
 

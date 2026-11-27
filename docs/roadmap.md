@@ -28,7 +28,7 @@ Status: **não iniciado**. Ordem sugerida:
   - [x] Consultas: o mesmo HQL para o `list(params)`/`count`/`exists`/`getAll` da domain, os dynamic finders e `findWhere`/`findAllWhere` (2026-11-27)
   - [x] Helpers do `GspPage` em `@CompileStatic` (feito na revisão de 2026-09-30)
   - [x] Religação de call sites do Groovy (2026-11-26): `ServiceProxies`, `DomainEventBridge` e a execução do `DetachedCriteria` em `@CompileStatic`; de 4,5% para 1,2% da página (ver [benchmark.md](benchmark.md#religação-de-call-sites-do-groovy-2026-11-26))
-  - [ ] Construtor das domains: as chamadas `$init$` dos traits religam (a domain e o proxy do Hibernate passam pelo mesmo call site); a AST pode compilar estaticamente o construtor sem argumentos que gera (~1,2% da página)
+  - [x] Construtor das domains: as chamadas `$init$` dos traits religavam (a domain e o proxy do Hibernate passam pelo mesmo call site); a `TraitInitTransformation` as torna chamadas diretas (2026-11-27): religação de 1,4% para 0,1% das amostras
   - [ ] Índice de rotas por primeiro segmento literal (match e reverse hoje são lineares)
   - [ ] Liberar a conexão JDBC após cada transação durante a renderização da view
   - [ ] Benchmark em máquina dedicada (gerador em outra máquina) e escolha do `grox.controllers.poolSize` padrão

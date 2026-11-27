@@ -1,1 +1,2 @@
 org.grox.data.ast.WhereQueryTransformation
+org.grox.data.ast.TraitInitTransformation
