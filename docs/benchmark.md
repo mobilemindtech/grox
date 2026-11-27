@@ -143,6 +143,21 @@ No perfil da `/usuario/index` (1 conexão), 4,5% das amostras estavam em `IndyIn
 - Medido pela fatia no JFR, e não pela vazão: nesta máquina (área de trabalho, redução de frequência da CPU), a vazão variou mais que o efeito entre rodadas iguais.
 - Construtor das domains: as chamadas `$init$` dos traits `GormEntity` e `ValidationSupport` ficam no construtor da domain, que é dinâmico (código da app), e eram `invokedynamic` guardados pelo tipo de `this`. A `TraitInitTransformation` (global, em `INSTRUCTION_SELECTION`, depois da composição dos traits) liga essas chamadas ao método do helper, e o Groovy emite `invokestatic`; o resto do construtor continua dinâmico. A/B na mesma máquina ocupada: `IndyInterface.fallback` de 62 para 4 amostras em 4,5 mil; CPU de 9,5 para 8,7 ms por requisição (a máquina estava ocupada, então a CPU é só indicativa).
 
+## Caminho dos controllers em `@CompileStatic` (2026-11-27)
+
+O `HttpPipeline` (rota, segurança, sessão, páginas de erro), o `ControllerRouter` (o antigo `WebDispatcher`), o `ControllerSupport` (`render`, `respond`, view adiada; o `withFormat` segue dinâmico), `Formats`, `RequestContext` e o casamento dos interceptors (`InterceptorRegistry`, `InterceptorMatcher`, `doesMatch`) passaram a `@CompileStatic`, com laços no lugar de `findAll`/`every`/`any`. O `Config.navigate` montava o nome da variável de ambiente com uma regex e consultava o ambiente a cada leitura de configuração (o `respond` lê `grails.scaffolding.templates.domainSuffix` a cada chamada); como o ambiente não muda com o processo rodando, a consulta fica em cache (as propriedades de sistema continuam relidas).
+
+A/B alternado (A, B, A, B) na `/usuario/index`, 1 conexão, 40 s com JFR, % das amostras:
+
+| | Rodada 1: A → B | Rodada 2: A → B |
+|---|---:|---:|
+| Runtime do Groovy (folha) chamado pelas classes alteradas | 9,9 → 3,1 | 10,1 → 2,8 |
+| Runtime do Groovy (folha) no total | 53,5 → 49,3 | 53,4 → 50,5 |
+| `Config.navigate` | 0,59 → 0,19 | 0,51 → 0,10 |
+
+- A CPU por requisição variou mais entre rodadas iguais (11,1 e 14,6 ms na versão A) que o efeito: a máquina reduzia a frequência da CPU. A fatia do JFR é a medida desta seção.
+- "Folha no runtime do Groovy": a amostra parou em `org.codehaus.groovy`, `groovy.lang` ou `java.lang.invoke`, atribuída ao frame do Grox mais próximo.
+
 ## HQL gerado no lugar da JPA Criteria (2026-11-26)
 
 `where`/`DetachedCriteria`/`createCriteria` passaram a gerar HQL a partir da árvore de critérios (`HqlQuery`): joins com alias, valores como parâmetros nomeados. A mesma forma de consulta gera a mesma string, e o Hibernate a encontra no cache de planos; com a JPA Criteria, a consulta era montada e analisada a cada vez.

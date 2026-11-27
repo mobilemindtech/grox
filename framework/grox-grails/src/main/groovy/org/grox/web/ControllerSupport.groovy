@@ -5,7 +5,12 @@ import org.grox.core.ClassUtils
 import org.grox.http.GroxResponse
 import org.grox.web.json.JsonSupport
 
-/** Implementação de render/redirect/respond/withFormat usada pelo trait dos controllers. */
+/**
+ * Implementação de render/redirect/respond/withFormat usada pelo trait dos controllers.
+ * <p>{@code @CompileStatic}: roda em toda action (o {@code withFormat}, que coleta blocos por {@code methodMissing},
+ * fica dinâmico).
+ */
+@groovy.transform.CompileStatic
 class ControllerSupport {
 
     /** {@code status: 404}, {@code status: '404'} ou {@code status: HttpStatus.NOT_FOUND}. */
@@ -60,6 +65,7 @@ class ControllerSupport {
      * {@code attachment} com o nome seguro: sem caracteres de controle (CRLF), aspas e barras
      * escapadas, e {@code filename*} em UTF-8 para nomes com acento (RFC 6266).
      */
+    @groovy.transform.CompileDynamic
     static String contentDisposition(String fileName) {
         String clean = fileName.replaceAll(/[\p{Cntrl}]/, '')
         String ascii = clean.replaceAll(/[^\x20-\x7e]/, '_')
@@ -145,6 +151,7 @@ class ControllerSupport {
      * {@code withFormat} do controller: bloco pelo formato da resposta (Accept, extensão, {@code format}).
      * Com {@code requestFormat} (o {@code request.withFormat}), pelo Content-Type da requisição, como no Grails.
      */
+    @groovy.transform.CompileDynamic
     static Object withFormat(WebRequest wr, Closure blocks, String requestFormat = null) {
         Map<String, Closure> collected = [:]
         def collector = new Object() {

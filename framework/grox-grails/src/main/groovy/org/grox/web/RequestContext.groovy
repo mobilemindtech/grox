@@ -5,6 +5,7 @@ package org.grox.web
  * action dentro do ator do controller. O valor é o mesmo do core ({@link org.grox.http.CurrentRequest}):
  * o {@link WebRequest} é a {@link org.grox.http.RequestScope} do módulo Grails.
  */
+@groovy.transform.CompileStatic
 final class RequestContext {
 
     static final ScopedValue<org.grox.http.RequestScope> CURRENT = org.grox.http.CurrentRequest.VALUE

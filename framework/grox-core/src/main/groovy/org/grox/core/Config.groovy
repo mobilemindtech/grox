@@ -153,6 +153,7 @@ class Config {
         }
     }
 
+    @groovy.transform.CompileStatic
     private static Object lookup(Map root, String path) {
         Object current = root
         for (String part : path.split(/\./)) {
@@ -242,14 +243,32 @@ class Config {
         }
     }
 
+    @groovy.transform.CompileStatic
     Object navigate(String path) {
         Object yaml = lookup(root, path)
         if (yaml instanceof Map) return yaml
         String sys = System.getProperty(path)
         if (sys != null) return sys
-        String env = System.getenv(path.toUpperCase().replaceAll(/[.\-]/, '_'))
+        String env = env(path)
         if (env != null) return env
         yaml
+    }
+
+    /**
+     * {@code GRAILS_SERVERURL} para {@code grails.serverURL}. As variáveis de ambiente não mudam com o processo
+     * rodando: o resultado fica em cache (antes, cada leitura de configuração numa requisição montava o nome
+     * com uma regex e consultava o ambiente).
+     */
+    private static final java.util.concurrent.ConcurrentHashMap<String, Optional<String>> ENV = new java.util.concurrent.ConcurrentHashMap<>()
+
+    @groovy.transform.CompileStatic
+    private static String env(String path) {
+        Optional<String> v = ENV.get(path)
+        if (v == null) {
+            v = Optional.ofNullable(System.getenv(path.toUpperCase().replace('.', '_').replace('-', '_')))
+            if (ENV.size() < 10_000) ENV.put(path, v)   // limite: caminhos montados dinamicamente não crescem sem fim
+        }
+        v.orElse(null)
     }
 
     Object get(String path) {

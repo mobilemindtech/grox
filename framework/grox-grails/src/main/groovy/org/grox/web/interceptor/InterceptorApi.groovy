@@ -33,12 +33,16 @@ trait InterceptorApi implements Ordered {
         match([:])
     }
 
+    @groovy.transform.CompileStatic
     boolean doesMatch(WebRequest wr) {
         if (interceptorMatchers.isEmpty()) {
             if (defaultControllerName == null) defaultControllerName = ClassUtils.logicalName(ClassUtils.userClass(this.getClass()), 'Interceptor')
             return wr.controllerName == defaultControllerName
         }
-        interceptorMatchers.any { it.matches(wr) }
+        for (InterceptorMatcher m : interceptorMatchers) {
+            if (m.matches(wr)) return true
+        }
+        false
     }
 
     /** false interrompe a requisição (renderize ou redirecione antes). */

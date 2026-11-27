@@ -6,6 +6,20 @@ import org.junit.jupiter.api.Test
 class ConfigTest {
 
     @Test
+    void 'variavel de ambiente em cache e propriedade de sistema sempre relida'() {
+        def config = new org.grox.core.Config([path: 'yaml'])
+        // PATH do processo: o ambiente vence o yaml (a consulta fica em cache, o resultado é o mesmo)
+        assert config.getProperty('path', String) == System.getenv('PATH') && config.getProperty('path', String) == System.getenv('PATH')
+        assert config.getProperty('grox.teste.cache.ambiente', String) == null
+        try {
+            System.setProperty('grox.teste.cache.ambiente', 'x')   // depois da primeira leitura: ainda vale
+            assert config.getProperty('grox.teste.cache.ambiente', String) == 'x'
+        } finally {
+            System.clearProperty('grox.teste.cache.ambiente')
+        }
+    }
+
+    @Test
     void 'placeholders dentro de listas de mapas'() {
         Map m = [app: [host: 'h1'], rabbitmq: [connections: [[name: 'a', host: '${app.host}', port: '${NAO_EXISTE_X:5672}'], ['${app.host}', ['${app.host}']]]]]
         org.grox.core.Config.resolvePlaceholders(m, m)

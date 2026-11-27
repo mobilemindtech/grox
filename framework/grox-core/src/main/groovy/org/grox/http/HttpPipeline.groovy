@@ -23,6 +23,7 @@ import java.util.concurrent.Executors
  * plugam o roteador, o filtro e os recursos.
  */
 @Slf4j
+@groovy.transform.CompileStatic
 class HttpPipeline implements RequestDispatcher, AutoCloseable {
 
     static final String ERROR_DISPATCH = 'grox.errorDispatch'

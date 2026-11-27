@@ -20,6 +20,7 @@ import java.util.concurrent.Executors
  * UrlMappings, e as páginas de erro mapeadas ({@code "404"}/{@code "500"}).
  */
 @Slf4j
+@groovy.transform.CompileStatic
 class ControllerRouter implements Router, AutoCloseable {
 
     final WebContext ctx

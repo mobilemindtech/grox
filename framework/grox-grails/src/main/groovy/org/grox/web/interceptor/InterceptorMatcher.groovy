@@ -10,13 +10,16 @@ import java.util.regex.Pattern
  * {@code match(controller: ~/(autor|editora)/)}, {@code match(uri: '/api/**')},
  * {@code match(method: 'POST')}, com {@code .excludes(action: 'index')}.
  */
+@groovy.transform.CompileStatic
 class InterceptorMatcher {
 
     final Map<String, Object> criteria
     final List<Map<String, Object>> exclusions = []
 
     InterceptorMatcher(Map<String, Object> criteria) {
-        criteria.keySet().each { if (!(it in ['controller', 'action', 'uri', 'method', 'namespace'])) throw new IllegalArgumentException("critério de interceptor desconhecido: ${it}") }
+        for (String k : criteria.keySet()) {
+            if (!(k in ['controller', 'action', 'uri', 'method', 'namespace'])) throw new IllegalArgumentException("critério de interceptor desconhecido: ${k}")
+        }
         this.criteria = compiled(criteria)
     }
 
@@ -27,19 +30,24 @@ class InterceptorMatcher {
 
     /** {@code uri: '/api/**'} vira Pattern uma vez, e não a cada requisição. */
     private static Map<String, Object> compiled(Map<String, Object> c) {
-        Object uri = c.uri
+        Object uri = c.get('uri')
         if (uri == null || uri instanceof Pattern || uri instanceof Collection || uri == '*') return c
         Map<String, Object> copy = new LinkedHashMap<>(c)
-        copy.uri = Pattern.compile(AccessRule.antToRegex(uri.toString()))
+        copy.put('uri', Pattern.compile(AccessRule.antToRegex(uri.toString())))
         copy
     }
 
     boolean matches(WebRequest wr) {
-        test(criteria, wr) && !exclusions.any { test(it, wr) }
+        if (!test(criteria, wr)) return false
+        for (Map<String, Object> e : exclusions) {
+            if (test(e, wr)) return false
+        }
+        true
     }
 
     private static boolean test(Map<String, Object> c, WebRequest wr) {
-        c.every { String key, Object expected ->
+        for (Map.Entry<String, Object> e : c.entrySet()) {
+            String key = e.key
             String actual = switch (key) {
                 case 'controller' -> wr.controllerName
                 case 'action' -> wr.actionName
@@ -47,8 +55,9 @@ class InterceptorMatcher {
                 case 'uri' -> wr.request.path
                 default -> null
             }
-            matchValue(expected, actual, key == 'uri')
+            if (!matchValue(e.value, actual, key == 'uri')) return false
         }
+        true
     }
 
     private static boolean matchValue(Object expected, String actual, boolean ant) {

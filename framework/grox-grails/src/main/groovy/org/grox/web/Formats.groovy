@@ -6,6 +6,7 @@ import org.grox.http.MimeTypes
  * Negociação de conteúdo: {@code params.format} (extensão na URL ou mapeamento), cabeçalho
  * Accept e, na falta dele, Content-Type JSON da requisição. {@code all} = sem preferência.
  */
+@groovy.transform.CompileStatic
 class Formats {
 
     static final Map<String, String> MIME_TO_FORMAT = MimeTypes.MIME_TO_FORMAT
