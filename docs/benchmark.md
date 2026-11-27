@@ -119,6 +119,16 @@ As seis viraram métodos `@CompileStatic` (antes, closures: cada acesso a `webRe
 - A segunda dupla rodou com a máquina mais lenta (provável redução de frequência da CPU depois de carga sustentada): vale a comparação dentro de cada dupla, não entre elas.
 - Script: `bench/run-logado.sh rotulo /usuario/index` (login por formulário, cookie no gerador de carga, CPU do processo por `/proc/<pid>/stat`; `DIST=` aponta outra distribuição para o A/B). O `bench/run.sh` mede rotas sem login.
 
+**Segunda rodada (2026-11-27):** os campos de formulário (`textField`, `hiddenField`, `passwordField`, `emailField`, `numberField`, `dateField`, `field`, `submitButton`), as tags de layout (`layoutTitle`, `layoutHead`, `layoutBody`, `pageProperty`, `ifPageProperty`), a `AssetTagLib` (`javascript`, `stylesheet`, `image`, `link`) e `sec:ifLoggedIn`/`ifNotLoggedIn` também viraram métodos `@CompileStatic`. A/B alternado (A, B, A, B), 1 conexão, 40 s com JFR:
+
+| | Rodada 1: A → B | Rodada 2: A → B |
+|---|---:|---:|
+| Amostras dentro das tags (`TagLibRegistry.callTag`, inclui os corpos) | 21,2% → 19,5% | 20,2% → 17,6% |
+| CPU/req | 14,2 → 10,8 ms | 12,3 → 11,3 ms |
+
+- Cerca de 2 pontos a menos de amostras nas tags (≈10% do tempo delas). A CPU por requisição foi na mesma direção, mas a máquina estava com o navegador ativo: a fatia do JFR é a medida mais confiável.
+- O que continua em closure é pouco usado nas páginas medidas (`select`, `checkBox`, `textArea`, `render`, `createLink`, as tags `sec:` de papéis...); converter quando aparecer no perfil.
+
 ## Religação de call sites do Groovy (2026-11-26)
 
 No perfil da `/usuario/index` (1 conexão), 4,5% das amostras estavam em `IndyInterface.fallback`: o Groovy religando um call site dinâmico a cada troca do tipo que ele vê. Acontece quando o mesmo ponto do framework atende tipos diferentes: o proxy dos services (services diferentes), o `DomainEventBridge` (o `afterLoad` de cada entidade carregada), o `DetachedCriteria` (domains diferentes) e o construtor das domains (o Hibernate instancia a domain e o proxy dela, uma subclasse).
@@ -290,7 +300,7 @@ Perfil da `/usuario/index` do sample-app com 1 conexão (JFR, só a janela de me
 
 | Fase | ms | Melhoria prevista |
 |---|---:|---|
-| Tags | 2,7 | Tags nativas em `@CompileStatic`: feito para `g:link`, `form`, `paginate`, `message`, `formatDate` e `sortableColumn` (cerca de 10% na página, ver acima); faltam as demais e a `AssetTagLib` |
+| Tags | 2,7 | Tags nativas em `@CompileStatic`: feito para `g:link`, `form`, `paginate`, `message`, `formatDate` e `sortableColumn` (cerca de 10% na página, ver acima) e, em 2026-11-27, para os campos de formulário, as tags de layout, a `AssetTagLib` e `sec:ifLoggedIn` (mais ≈10% do tempo das tags) |
 | Banco | 2,5 | HQL gerado e em cache para consultas repetidas (a interpretação SQM e a hidratação dominam; o H2 é 0,3 ms) |
 | Action | 2,1 | Proxy dos services, `DetachedCriteria`, `respond`: espalhado, nenhum item acima de 0,15 ms |
 | Virtual threads e despacho solto | 1,8 | Menos saltos de thread nas rotas simples |

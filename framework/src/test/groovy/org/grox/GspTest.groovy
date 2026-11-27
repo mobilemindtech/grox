@@ -221,13 +221,33 @@ class GspTest {
         assert out.contains('<p>oi</p>')
         assert out.endsWith('Rê</body></html>')
         // nome de bloco com ponto, como no layout do app A
-        write('/layouts/pontos', '''<html><head><title><g:layoutTitle/></title></head><body><g:layoutBody/><g:if test="${ pageProperty(name:'page.include.bottom') }"><g:pageProperty name="page.include.bottom"/></g:if><i><g:pageProperty name="page.include.naoExiste" default="-"/></i></body></html>''')
+        write('/layouts/pontos', '''<html><head><title><g:layoutTitle default="Sem"/></title></head><body><g:ifPageProperty name="page.include.bottom">[B]</g:ifPageProperty><g:ifPageProperty name="page.nada">[N]</g:ifPageProperty><g:layoutBody/><g:if test="${ pageProperty(name:'page.include.bottom') }"><g:pageProperty name="page.include.bottom"/></g:if><i><g:pageProperty name="page.include.naoExiste" default="-"/></i></body></html>''')
         String comPonto = render('/pg2', '''<html><head><meta name="layout" content="pontos"/></head><body><p>corpo</p><content tag="include.bottom"><script src="/assets/frontend/suporte.js"></script></content></body></html>''')
         String out2 = rc.bind { views.layouts.decorate(comPonto, [:], rc) }
         assert out2.contains('<p>corpo</p><script src="/assets/frontend/suporte.js"></script><i>-</i>')
+        assert out2.contains('<title>Sem</title>') && out2.contains('<body>[B]<p>corpo</p>') && !out2.contains('[N]')
         // sem layout: devolve a página intacta
         String semLayout = '<html><head><title>x</title></head><body>y</body></html>'
         assert rc.bind { views.layouts.decorate(semLayout, [:], rc) } == semLayout
+    }
+
+    @Test
+    void 'campos de formulario e tags de asset escritos como metodos'() {
+        def tags = new TagLibRegistry()
+        tags.register(new org.grox.view.taglib.FormTagLib())
+        tags.register(new org.grox.plugins.assetpipeline.AssetTagLib())
+        def eng = new GspTemplateEngine(new ViewLocator(dir, GspTest.classLoader), true, tags, GspTest.classLoader)
+        write('/campos', '<g:hiddenField name="id" value="${7}"/>|<g:passwordField name="senha"/>|<g:emailField name="e" value="${u}"/>|' +
+                '<g:numberField name="n" id="x"/>|<g:dateField name="d"/>|<g:field type="color" name="c"/>|<g:submitButton name="ok"/>|' +
+                '<asset:image src="logo.png" alt="L"/>|<asset:javascript src="app"/>|<asset:stylesheet src="/app.css"/>|<asset:link rel="icon" href="f.ico"/>')
+        def sw = new StringWriter()
+        def rc = new GspRenderContext(null, new GspViews(eng, tags, null), sw)
+        rc.bind { eng.render(eng.find('/campos'), [u: 'a"b'], rc) }
+        assert sw.toString().tokenize('|') == ['<input type="hidden" name="id" value="7" />', '<input type="password" name="senha" id="senha" />',
+                '<input type="email" name="e" value="a&quot;b" id="e" />', '<input type="number" name="n" id="x" />',
+                '<input type="date" name="d" id="d" />', '<input type="color" name="c" id="c" />', '<input type="submit" name="ok" value="ok" />',
+                '<img src="/assets/logo.png" alt="L"/>', '<script src="/assets/app.js"></script>', '<link rel="stylesheet" href="/assets/app.css"/>',
+                '<link href="/assets/f.ico" rel="icon"/>']
     }
 
     @Test

@@ -1,5 +1,6 @@
 package org.grox.plugins.assetpipeline
 
+import groovy.transform.CompileStatic
 import org.grox.view.taglib.TagLibApi
 import org.grox.assets.AssetServer
 import org.grox.http.Html
@@ -14,15 +15,18 @@ class AssetTagLib implements TagLibApi {
     static returnObjectForTags = ['assetPath', 'assetPathExists']
 
     /** {@code <asset:javascript src="application.js"/>} */
-    def javascript = { Map attrs ->
+    @CompileStatic
+    void javascript(Map attrs) {
         String src = withExtension(required(attrs, 'src', 'javascript'), 'js')
-        out << '<script src="' << Html.escape(url(src)) << '"' << Html.attributes(attrs) << '></script>'
+        out.write('<script src="' + Html.escape(url(src)) + '"' + Html.attributes(attrs) + '></script>')
     }
 
     /** {@code <asset:stylesheet href="application.css"/>} (aceita também src) */
-    def stylesheet = { Map attrs ->
-        String href = withExtension((attrs.remove('href') ?: required(attrs, 'src', 'stylesheet')).toString(), 'css')
-        out << '<link rel="stylesheet" href="' << Html.escape(url(href)) << '"' << Html.attributes(attrs) << '/>'
+    @CompileStatic
+    void stylesheet(Map attrs) {
+        Object h = attrs.remove('href')
+        String href = withExtension(h != null && h.toString() ? h.toString() : required(attrs, 'src', 'stylesheet'), 'css')
+        out.write('<link rel="stylesheet" href="' + Html.escape(url(href)) + '"' + Html.attributes(attrs) + '/>')
     }
 
     static final String DEFERRED = 'grox.asset.deferredScripts'
@@ -52,15 +56,17 @@ class AssetTagLib implements TagLibApi {
     }
 
     /** {@code <asset:image src="logo.png" alt="Logo"/>} */
-    def image = { Map attrs ->
+    @CompileStatic
+    void image(Map attrs) {
         String src = required(attrs, 'src', 'image')
-        out << '<img src="' << Html.escape(url(src)) << '"' << Html.attributes(attrs) << '/>'
+        out.write('<img src="' + Html.escape(url(src)) + '"' + Html.attributes(attrs) + '/>')
     }
 
     /** {@code <asset:link rel="icon" href="favicon.ico" type="image/x-icon"/>} */
-    def link = { Map attrs ->
+    @CompileStatic
+    void link(Map attrs) {
         String href = required(attrs, 'href', 'link')
-        out << '<link href="' << Html.escape(url(href)) << '"' << Html.attributes(attrs) << '/>'
+        out.write('<link href="' + Html.escape(url(href)) + '"' + Html.attributes(attrs) + '/>')
     }
 
     /** {@code ${assetPath(src: 'logo.png')}} */
@@ -75,12 +81,14 @@ class AssetTagLib implements TagLibApi {
     /** O servidor de assets da geração corrente, definido pelo {@link AssetPipelineModule} (vale também nas rotas do grox-dsl). */
     static volatile AssetServer server
 
+    @CompileStatic
     private AssetServer assets() {
         server
     }
 
+    @CompileStatic
     private String url(String logical) {
-        assets()?.url(logical) ?: '/assets/' + logical.replaceAll(/^\//, '')
+        assets()?.url(logical) ?: '/assets/' + (logical.startsWith('/') ? logical.substring(1) : logical)
     }
 
     private static String withExtension(String name, String ext) {

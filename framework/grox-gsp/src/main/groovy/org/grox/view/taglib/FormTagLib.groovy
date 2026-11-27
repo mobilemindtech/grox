@@ -51,23 +51,32 @@ class FormTagLib implements TagLibApi {
         form(attrs, body)  // form já escreve em out (não usar "out << form(...)")
     }
 
-    def field = { Map attrs -> input(attrs.remove('type')?.toString() ?: 'text', attrs) }
+    // campos em @CompileStatic: são as tags mais repetidas dos formulários (despacho dinâmico custava por campo)
+    @groovy.transform.CompileStatic
+    void field(Map attrs) { input(attrs.remove('type')?.toString() ?: 'text', attrs) }
 
-    def textField = { Map attrs -> input('text', attrs) }
+    @groovy.transform.CompileStatic
+    void textField(Map attrs) { input('text', attrs) }
 
-    def passwordField = { Map attrs -> input('password', attrs) }
+    @groovy.transform.CompileStatic
+    void passwordField(Map attrs) { input('password', attrs) }
 
-    def hiddenField = { Map attrs -> input('hidden', attrs) }
+    @groovy.transform.CompileStatic
+    void hiddenField(Map attrs) { input('hidden', attrs) }
 
-    def emailField = { Map attrs -> input('email', attrs) }
+    @groovy.transform.CompileStatic
+    void emailField(Map attrs) { input('email', attrs) }
 
-    def numberField = { Map attrs -> input('number', attrs) }
+    @groovy.transform.CompileStatic
+    void numberField(Map attrs) { input('number', attrs) }
 
-    def dateField = { Map attrs -> input('date', attrs) }
+    @groovy.transform.CompileStatic
+    void dateField(Map attrs) { input('date', attrs) }
 
-    def submitButton = { Map attrs ->
-        attrs.value = attrs.value ?: attrs.name ?: 'Submit'
-        out << '<input type="submit"' << Html.attributes(attrs) << ' />'
+    @groovy.transform.CompileStatic
+    void submitButton(Map attrs) {
+        attrs.put('value', attrs.get('value') ?: attrs.get('name') ?: 'Submit')
+        out.write('<input type="submit"' + Html.attributes(attrs) + ' />')
     }
 
     /** {@code <g:actionSubmit action="delete" value="Excluir"/>}: submit que escolhe a action ({@code _action_delete}). */
@@ -173,12 +182,13 @@ class FormTagLib implements TagLibApi {
         how instanceof Closure ? ((Closure) how).call(item) : item[how.toString()]
     }
 
+    @groovy.transform.CompileStatic
     private void input(String type, Map attrs) {
         String name = required(attrs, 'name', type + 'Field')
-        if (!attrs.id && type != 'hidden') attrs.id = name
+        if (!attrs.get('id') && type != 'hidden') attrs.put('id', name)
         Object value = attrs.remove('value')
-        out << '<input type="' << type << '" name="' << Html.escape(name) << '"' <<
-                (value != null ? ' value="' + Html.escape(value) + '"' : '') << Html.attributes(attrs) << ' />'
+        out.write('<input type="' + type + '" name="' + Html.escape(name) + '"' +
+                (value != null ? ' value="' + Html.escape(value) + '"' : '') + Html.attributes(attrs) + ' />')
     }
 
     private static String required(Map attrs, String attr, String tag) {

@@ -1,5 +1,6 @@
 package org.grox.plugins.springsecurity
 
+import org.grox.view.taglib.ApplicationTagLib
 import org.grox.view.taglib.TagLibApi
 import grails.plugin.springsecurity.SpringSecurityUtils
 import org.grox.security.AccessExpression
@@ -14,9 +15,11 @@ class SecurityTagLib implements TagLibApi {
     static namespace = 'sec'
     static returnObjectForTags = ['csrfToken']
 
-    def ifLoggedIn = { attrs, body -> if (auth()) out << body() }
+    @groovy.transform.CompileStatic
+    void ifLoggedIn(Map attrs, Closure body) { if (auth()) ApplicationTagLib.writeBody(out, body) }
 
-    def ifNotLoggedIn = { attrs, body -> if (!auth()) out << body() }
+    @groovy.transform.CompileStatic
+    void ifNotLoggedIn(Map attrs, Closure body) { if (!auth()) ApplicationTagLib.writeBody(out, body) }
 
     def ifAllGranted = { attrs, body -> if (SpringSecurityUtils.ifAllGranted(attrs.roles.toString())) out << body() }
 

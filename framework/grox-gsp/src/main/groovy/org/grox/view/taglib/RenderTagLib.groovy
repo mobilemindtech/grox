@@ -114,25 +114,31 @@ class RenderTagLib implements TagLibApi {
         out.write('<th class="' + css + '"' + Html.attributes(attrs) + '><a href="' + Html.escape(href) + '">' + Html.escape(title) + '</a></th>')
     }
 
-    def layoutTitle = { Map attrs ->
-        out << (SiteMeshLayouts.property(renderContext.layoutContent, 'title') ?: attrs.default ?: '')
+    // tags de layout em @CompileStatic: rodam em toda página decorada
+    @groovy.transform.CompileStatic
+    void layoutTitle(Map attrs) {
+        out.write((SiteMeshLayouts.property(renderContext.layoutContent, 'title') ?: attrs.get('default') ?: '').toString())
     }
 
-    def layoutHead = { Map attrs ->
-        out << (SiteMeshLayouts.property(renderContext.layoutContent, 'head') ?: '')
+    @groovy.transform.CompileStatic
+    void layoutHead(Map attrs) {
+        out.write(SiteMeshLayouts.property(renderContext.layoutContent, 'head') ?: '')
     }
 
-    def layoutBody = { Map attrs ->
-        out << (SiteMeshLayouts.property(renderContext.layoutContent, 'body') ?: '')
+    @groovy.transform.CompileStatic
+    void layoutBody(Map attrs) {
+        out.write(SiteMeshLayouts.property(renderContext.layoutContent, 'body') ?: '')
     }
 
     /** {@code <g:pageProperty name="page.menu"/>}, {@code name="meta.description"}, {@code name="body.onload"}. */
-    def pageProperty = { Map attrs ->
-        out << (SiteMeshLayouts.property(renderContext.layoutContent, attrs.name.toString()) ?: attrs.default ?: '')
+    @groovy.transform.CompileStatic
+    void pageProperty(Map attrs) {
+        out.write((SiteMeshLayouts.property(renderContext.layoutContent, attrs.get('name').toString()) ?: attrs.get('default') ?: '').toString())
     }
 
-    def ifPageProperty = { Map attrs, body ->
-        if (SiteMeshLayouts.property(renderContext.layoutContent, attrs.name.toString())) out << body()
+    @groovy.transform.CompileStatic
+    void ifPageProperty(Map attrs, Closure body) {
+        if (SiteMeshLayouts.property(renderContext.layoutContent, attrs.get('name').toString())) ApplicationTagLib.writeBody(out, body)
     }
 
     /** {@code <g:applyLayout name="bloco">conteúdo</g:applyLayout>} */
