@@ -19,7 +19,10 @@ import java.util.function.Function
  *       ao último.</li>
  * </ul>
  * Chamadas internas ({@code this.metodo()}) não passam pelo proxy.
+ * <p>{@code @CompileStatic}: roda em toda chamada de service, e o mesmo call site atende services de tipos
+ * diferentes (no despacho dinâmico, o Groovy religava o call site a cada troca de tipo).
  */
+@groovy.transform.CompileStatic
 class ServiceProxies {
 
     static final Set<String> SKIP = ['getMetaClass', 'setMetaClass', 'invokeMethod', 'getProperty', 'setProperty',
@@ -32,7 +35,8 @@ class ServiceProxies {
             List<Closure> chain = arounds[name]
             if (chain) {
                 for (int i = chain.size() - 1; i >= 0; i--) {
-                    Closure around = chain[i], inner = call
+                    Closure around = chain[i]
+                    Closure inner = call
                     call = { -> around.call(inner) }
                 }
             }
@@ -60,11 +64,13 @@ class ServiceProxies {
     }
 
     static Set<String> proxiedMethods(Class<?> type) {
-        type.methods.findAll { Method m ->
-            !Modifier.isStatic(m.modifiers) && !Modifier.isFinal(m.modifiers) && !m.synthetic &&
+        Set<String> names = new LinkedHashSet<>()
+        for (Method m : type.methods) {
+            if (!Modifier.isStatic(m.modifiers) && !Modifier.isFinal(m.modifiers) && !m.synthetic &&
                     m.declaringClass != Object && m.declaringClass != GroovyObject &&
-                    !m.name.contains('$') && !(m.name in SKIP)
-        }*.name as Set<String>
+                    !m.name.contains('$') && !(m.name in SKIP)) names << m.name
+        }
+        names
     }
 
     static Object await(Awaitable<Object> result) {

@@ -66,26 +66,34 @@ class DetachedCriteria<T> implements Iterable<T> {
         new DetachedCriteria<T>(type, criteria, options + extra)
     }
 
+    // execução @CompileStatic: o mesmo call site atende domains diferentes (no despacho dinâmico, religava a cada troca)
+    @groovy.transform.CompileStatic
     private QueryRunner runner(Map params = [:]) {
         def r = new QueryRunner(Gorm.api(type))
-        r.criteria = new ArrayList(criteria)
+        r.criteria = new ArrayList<Criterion>(criteria)
         r.params(options + (params ?: [:]))
     }
 
+    @groovy.transform.CompileStatic
     List<T> list(Map params = [:]) { (List<T>) runner(params).list(options + (params ?: [:])) }
 
     List<T> findAll(Map params = [:]) { list(params) }
 
+    @groovy.transform.CompileStatic
     T find(Map params = [:]) { (T) runner(params).unique() }
 
     T get(Map params = [:]) { find(params) }
 
+    @groovy.transform.CompileStatic
     long count() { runner().count() }
 
+    @groovy.transform.CompileStatic
     boolean exists() { runner().unique() != null }
 
+    @groovy.transform.CompileStatic
     int deleteAll() { runner().deleteAll() }
 
+    @groovy.transform.CompileStatic
     int updateAll(Map values) { runner().updateAll(values) }
 
     @Override

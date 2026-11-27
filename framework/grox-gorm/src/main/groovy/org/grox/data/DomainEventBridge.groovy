@@ -33,7 +33,10 @@ import org.hibernate.persister.entity.EntityPersister
  *       os mesmos eventos antes da validação) não dispara de novo;</li>
  *   <li>{@code afterInsert}, {@code afterUpdate}, {@code afterDelete} e {@code afterLoad}, depois do SQL.</li>
  * </ul>
+ * <p>{@code @CompileStatic}: roda a cada entidade carregada ({@code afterLoad}), e o mesmo call site vê entidades
+ * de tipos diferentes (no despacho dinâmico, o Groovy religava o call site a cada troca de tipo).
  */
+@groovy.transform.CompileStatic
 class DomainEventBridge implements PreInsertEventListener, PreUpdateEventListener, PostInsertEventListener,
         PostUpdateEventListener, PostDeleteEventListener, PostLoadEventListener, FlushEventListener, AutoFlushEventListener {
 
@@ -56,7 +59,7 @@ class DomainEventBridge implements PreInsertEventListener, PreUpdateEventListene
     /** O {@code save()} já disparou os eventos {@code before*} desta entidade nesta sessão. */
     static void handled(Object session, Object entity) {
         if (session == null || entity == null) return
-        Set<Object> set = HANDLED.computeIfAbsent(session) { Collections.newSetFromMap(new IdentityHashMap<Object, Boolean>()) }
+        Set<Object> set = HANDLED.computeIfAbsent(session) { Object k -> Collections.newSetFromMap(new IdentityHashMap<Object, Boolean>()) }
         synchronized (set) { set.add(entity) }
     }
 
@@ -122,13 +125,14 @@ class DomainEventBridge implements PreInsertEventListener, PreUpdateEventListene
     private static final ClassValue<Set<String>> METHODS = new ClassValue<Set<String>>() {
         @Override
         protected Set<String> computeValue(Class<?> type) {
-            EVENT_METHODS.findAll { String n -> !type.metaClass.respondsTo(type, n).isEmpty() } as Set<String>
+            def meta = org.codehaus.groovy.runtime.InvokerHelper.getMetaClass(type)
+            EVENT_METHODS.findAll { String n -> !meta.respondsTo(type, n).isEmpty() } as Set<String>
         }
     }
 
     private static void call(Object entity, String name) {
         if (entity == null) return
         Class<?> type = org.grox.core.ClassUtils.userClass(entity.getClass())
-        if (METHODS.get(type).contains(name) && Gorm.isDomain(type)) entity.invokeMethod(name, null)
+        if (METHODS.get(type).contains(name) && Gorm.isDomain(type)) org.codehaus.groovy.runtime.InvokerHelper.invokeMethod(entity, name, null)
     }
 }

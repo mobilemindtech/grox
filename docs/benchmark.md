@@ -119,6 +119,19 @@ As seis viraram métodos `@CompileStatic` (antes, closures: cada acesso a `webRe
 - A segunda dupla rodou com a máquina mais lenta (provável redução de frequência da CPU depois de carga sustentada): vale a comparação dentro de cada dupla, não entre elas.
 - Script: `bench/run-logado.sh rotulo /usuario/index` (login por formulário, cookie no gerador de carga, CPU do processo por `/proc/<pid>/stat`; `DIST=` aponta outra distribuição para o A/B). O `bench/run.sh` mede rotas sem login.
 
+## Religação de call sites do Groovy (2026-11-26)
+
+No perfil da `/usuario/index` (1 conexão), 4,5% das amostras estavam em `IndyInterface.fallback`: o Groovy religando um call site dinâmico a cada troca do tipo que ele vê. Acontece quando o mesmo ponto do framework atende tipos diferentes: o proxy dos services (services diferentes), o `DomainEventBridge` (o `afterLoad` de cada entidade carregada), o `DetachedCriteria` (domains diferentes) e o construtor das domains (o Hibernate instancia a domain e o proxy dela, uma subclasse).
+
+| Mudança | Amostras na página |
+|---|---|
+| Antes | religação 4,5%; `DomainEventBridge` 2,4% |
+| `ServiceProxies` e `DomainEventBridge` em `@CompileStatic` | religação 2,8%; `DomainEventBridge` 0% |
+| Execução do `DetachedCriteria` (`list`, `count`, `find`...) em `@CompileStatic` | religação 1,2% (só o construtor das domains) |
+
+- Medido pela fatia no JFR, e não pela vazão: nesta máquina (área de trabalho, redução de frequência da CPU), a vazão variou mais que o efeito entre rodadas iguais.
+- Falta o construtor das domains (`Grupo.<init>`, 1,2%): as chamadas `$init$` dos traits `GormEntity` e `ValidationSupport` ficam no construtor da domain, que é dinâmico (código da app). A AST poderia compilar estaticamente o construtor sem argumentos que ela gera.
+
 ## Memória: Grails x Grox (2026-10-31)
 
 A mesma app de livros da seção anterior, com o heap fixo (`-Xmx`), NMT ligado e 15 s de carga com 64 conexões na `/livros` (GSP) e depois na `/api/livros/7` (JSON). "Heap vivo" é o usado logo depois de um GC completo (`jcmd GC.run`). A máquina estava ocupada (load de 4 a 10), então os req/s não valem aqui.

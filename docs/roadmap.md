@@ -26,6 +26,8 @@ Status: **não iniciado**. Ordem sugerida:
   - [ ] `@CompileStatic` em `NettyHttpHandler` (`convert`, `enqueue`, `HeaderMap`), `WebDispatcher`, `ControllerSupport` e `SecurityFilter`, com lambdas nativas no lugar das closures do `CompletableFuture`: ~1,3 ms de Netty mais o custo fixo de toda requisição. **Feito em parte (2026-10-10):** `NettyHttpHandler`, `HeaderMap.add`, o `SecurityFilter.process` e os auxiliares, `SecurityConfig.isStateless` e `HttpPipeline.withSecurityHeaders`; rotas `virtual` do `grox-dsl` e a gravação da sessão sem salto de thread extra. Faltam `WebDispatcher` e `ControllerSupport` (caminho dos controllers)
   - [ ] Consultas: HQL gerado e em cache para `DetachedCriteria`/`where`/finders repetidos, em vez de montar a Criteria a cada chamada (aproveita o cache de plano do Hibernate); ~2,5 ms por página, dos quais o H2 é só 0,3 ms
   - [x] Helpers do `GspPage` em `@CompileStatic` (feito na revisão de 2026-09-30)
+  - [x] Religação de call sites do Groovy (2026-11-26): `ServiceProxies`, `DomainEventBridge` e a execução do `DetachedCriteria` em `@CompileStatic`; de 4,5% para 1,2% da página (ver [benchmark.md](benchmark.md#religação-de-call-sites-do-groovy-2026-11-26))
+  - [ ] Construtor das domains: as chamadas `$init$` dos traits religam (a domain e o proxy do Hibernate passam pelo mesmo call site); a AST pode compilar estaticamente o construtor sem argumentos que gera (~1,2% da página)
   - [ ] Índice de rotas por primeiro segmento literal (match e reverse hoje são lineares)
   - [ ] Liberar a conexão JDBC após cada transação durante a renderização da view
   - [ ] Benchmark em máquina dedicada (gerador em outra máquina) e escolha do `grox.controllers.poolSize` padrão
