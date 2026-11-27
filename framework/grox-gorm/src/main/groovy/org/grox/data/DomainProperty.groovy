@@ -5,7 +5,8 @@ class DomainProperty {
 
     /** ELEMENT_COLLECTION: {@code hasMany = [tags: String]} (valores simples numa tabela de junção). */
     /** ONE_TO_ONE: hasOne do GORM (no dono, inverso com {@code mappedBy}; no filho, com a chave estrangeira). */
-    enum Kind { ID, VERSION, TENANT_ID, BASIC, MANY_TO_ONE, ONE_TO_ONE, ONE_TO_MANY, MANY_TO_MANY, ELEMENT_COLLECTION }
+    /** EMBEDDED: {@code static embedded = ['endereco']} (as propriedades do componente em {@link #embeddedProperties}). */
+    enum Kind { ID, VERSION, TENANT_ID, BASIC, MANY_TO_ONE, ONE_TO_ONE, ONE_TO_MANY, MANY_TO_MANY, ELEMENT_COLLECTION, EMBEDDED }
 
     String name
     Class<?> type
@@ -32,6 +33,8 @@ class DomainProperty {
     String elementColumn
     String orderColumn
     boolean nullable
+    /** EMBEDDED: propriedades básicas do componente, com as colunas no dono ({@code endereco_rua}). */
+    Map<String, DomainProperty> embeddedProperties
     /** column, length, unique, sqlType (de {@code static mapping} e das constraints). */
     Map<String, Object> column = [:]
 

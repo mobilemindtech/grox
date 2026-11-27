@@ -441,22 +441,26 @@ class SampleAppTest {
         def novo = c.page('/grupo/create')
         assert novo.status() == 200 && novo.body() =~ /<input type="text" name="nome" id="nome" required="required"/
         assert !novo.body().contains('name="usuarios"')                     // hasMany fica fora do formulário
+        // componente (embedded): um fieldset com um campo por propriedade
+        assert novo.body() =~ /<fieldset class="embedded sede"><legend>Sede<\/legend>.*name="sede.cidade".*name="sede.uf" id="sede.uf" maxlength="2"/
 
         def invalido = c.form('/grupo/save', [nome: ''])
         assert invalido.status() == 422 && invalido.body().contains('class="errors"') && invalido.body().contains('fieldcontain required error')
 
-        def salvo = c.form('/grupo/save', [nome: 'Scaffold'])
+        def salvo = c.form('/grupo/save', [nome: 'Scaffold', 'sede.cidade': 'Curitiba', 'sede.uf': 'PR'])
         assert salvo.status() == 302
         String show = salvo.headers().firstValue('Location').get()
         long id = (show =~ /\/grupo\/show\/(\d+)/)[0][1] as long
         def pagina = c.page(show)
         assert pagina.body().contains('scaffold-show') && pagina.body().contains('Scaffold') && pagina.body().contains('criado')
+        assert pagina.body().contains('Curitiba, PR')
 
         def edit = c.page("/grupo/edit/${id}")
         assert edit.body().contains('value="Scaffold"') && edit.body().contains('name="_method" value="PUT"')
         assert c.form("/grupo/update/${id}", [_method: 'PUT', nome: 'Scaffold 2']).status() == 302
         def json = c.send('GET', "/grupo/show/${id}", null, [Accept: 'application/json'])
         assert json.status() == 200 && TestClient.parse(json).nome == 'Scaffold 2'
+        assert TestClient.parse(json).sede == [cidade: 'Curitiba', uf: 'PR']
         assert c.page('/grupo/index?max=100').body().contains("<a href=\"/grupo/show/${id}\">Scaffold 2</a>")
 
         def removido = c.form("/grupo/delete/${id}", [_method: 'DELETE'])

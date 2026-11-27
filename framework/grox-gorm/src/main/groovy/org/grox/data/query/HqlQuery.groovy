@@ -47,6 +47,11 @@ class HqlQuery {
         for (int i = 0; i < parts.size() - 1; i++) {
             String p = parts[i]
             DomainProperty prop = d?.getAt(p)
+            if (prop?.kind == DomainProperty.Kind.EMBEDDED && i == parts.size() - 2) {
+                // endereco.cidade: coluna do próprio dono, sem join
+                if (!prop.embeddedProperties.containsKey(parts.last())) throw new IllegalArgumentException("propriedade desconhecida em ${prop.referencedType.simpleName}: ${parts.last()} (caminho ${dotted})")
+                return from + '.' + p + '.' + parts.last()
+            }
             if (prop == null || !prop.association) throw new IllegalArgumentException("${d?.name}.${p} não é uma associação (caminho ${dotted})")
             prefix += (prefix ? '.' : '') + p
             String alias = cache.get(prefix)

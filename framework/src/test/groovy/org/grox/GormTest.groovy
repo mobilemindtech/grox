@@ -26,7 +26,8 @@ class GormTest {
     static void start() {
         def config = new Config([dataSource: [url: 'jdbc:h2:mem:gormTest;DB_CLOSE_DELAY=-1', dbCreate: 'create-drop'],
                                  hibernate : [generate_statistics: true]])
-        datastore = new Datastore(config, [Autor, Livro, org.grox.testdomain.Etiquetado, org.grox.testdomain.Pasta, org.grox.testdomain.Rosto, org.grox.testdomain.Nariz, org.grox.testdomain.Produto, org.grox.testdomain.Carro, org.grox.testdomain.Motor, org.grox.testdomain.Evento], GormTest.classLoader)
+        datastore = new Datastore(config, [Autor, Livro, org.grox.testdomain.Etiquetado, org.grox.testdomain.Pasta, org.grox.testdomain.Rosto, org.grox.testdomain.Nariz, org.grox.testdomain.Produto, org.grox.testdomain.Carro, org.grox.testdomain.Motor, org.grox.testdomain.Evento,
+                org.grox.testdomain.Pessoa, org.grox.testdomain.Endereco], GormTest.classLoader)
         Gorm.init(datastore)
     }
 
@@ -663,5 +664,47 @@ class GormTest {
         // antes: invokedynamic, que religava quando o Hibernate instanciava o proxy (subclasse) pelo mesmo construtor
         assert calls.contains('GormEntity$Trait$Helper') && calls.contains('ValidationSupport$Trait$Helper') && indy == 0
         assert new Autor(nome: 'Ana').nome == 'Ana' && new Autor().errors != null
+    }
+
+    @Test
+    void 'embedded grava o componente nas colunas do dono, com consulta, validacao, JSON e binding'() {
+        def Pessoa = org.grox.testdomain.Pessoa
+        // o Endereco está em grails-app/domain (recebeu id/version da AST), mas é componente: sem tabela nem API estática
+        assert !datastore.domains.containsKey(org.grox.testdomain.Endereco) && !Gorm.isDomain(org.grox.testdomain.Endereco)
+        def end = datastore.domains[Pessoa].persistentProperties.endereco
+        assert end.kind == org.grox.data.DomainProperty.Kind.EMBEDDED && end.embeddedProperties.keySet() == ['rua', 'cidade', 'uf', 'numeroPredial'] as Set
+        Long id = Pessoa.withTransaction {
+            new org.grox.testdomain.Pessoa(nome: 'Ana', endereco: [rua: 'Rua A', cidade: 'Curitiba', uf: 'PR', numeroPredial: '10'],
+                    contato: [email: 'ana@x.com']).save(failOnError: true, flush: true).id
+        }
+        Pessoa.withTransaction { new org.grox.testdomain.Pessoa(nome: 'Bia', endereco: new org.grox.testdomain.Endereco(cidade: 'Rio', uf: org.grox.testdomain.Uf.RJ)).save(failOnError: true) }
+        // colunas do GORM: <propriedade>_<campo>, na tabela do dono
+        def linha = Pessoa.withSession { s -> s.createNativeQuery("select endereco_rua, endereco_cidade, endereco_uf, endereco_numero_predial, contato_email, contato_telefone from pessoa where nome = 'Ana'", Object[]).singleResult }
+        assert linha as List == ['Rua A', 'Curitiba', 'PR', 10, 'ana@x.com', null]
+        // consultas pelo caminho do componente (where, criteria com conversão de String para enum, findAllWhere e sort)
+        assert Pessoa.where { endereco.cidade == 'Curitiba' }.list()*.nome == ['Ana']
+        assert Pessoa.createCriteria().list { eq('endereco.uf', 'RJ') }*.nome == ['Bia']
+        assert Pessoa.findAllWhere('endereco.cidade': 'Rio')*.nome == ['Bia']
+        assert Pessoa.createCriteria().list { order('endereco.cidade', 'desc') }*.nome == ['Bia', 'Ana']
+        // carga, componente nulo, alteração por dirty checking
+        Pessoa.withTransaction {
+            def ana = Pessoa.get(id)
+            assert ana.endereco.cidade == 'Curitiba' && ana.endereco.numeroPredial == 10 && ana.contato.email == 'ana@x.com'
+            ana.endereco.cidade = 'Londrina'
+        }
+        assert Pessoa.withTransaction { Pessoa.findByNome('Bia').contato } == null
+        assert Pessoa.withTransaction { Pessoa.get(id).endereco.cidade } == 'Londrina'
+        // JSON: o componente vira um objeto aninhado
+        Map json = Pessoa.withTransaction { org.grox.data.DomainJson.entity(Pessoa.get(id)) }
+        assert json.endereco == [rua: 'Rua A', cidade: 'Londrina', uf: org.grox.testdomain.Uf.PR, numeroPredial: 10] && json.contato == [email: 'ana@x.com', telefone: null]
+        // obrigatório por padrão, como no GORM (o contato é nullable)
+        def sem = new org.grox.testdomain.Pessoa(nome: 'Caio')
+        assert !sem.validate() && sem.errors.getFieldError('endereco')?.code == 'default.null.message' && !sem.errors.getFieldError('contato')
+        // as constraints do componente valem no validate() do dono, no campo endereco.rua
+        def longa = new org.grox.testdomain.Pessoa(nome: 'Davi', endereco: [rua: 'x' * 61, cidade: 'Rio'])
+        assert !longa.validate() && longa.errors.getFieldError('endereco.rua')?.codes?.contains('pessoa.endereco.rua.maxSize.exceeded')
+        assert longa.validate(['nome']) && longa.validate(['endereco']) == false
+        assert new org.grox.testdomain.Pessoa(nome: 'Eva', endereco: [rua: 'x' * 60]).validate()
+        Pessoa.executeUpdate('delete from Pessoa')
     }
 }

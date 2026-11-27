@@ -98,7 +98,7 @@ Legenda: ✅ suportado · 🟡 parcial · ❌ ausente (ver [roadmap](roadmap.md)
 |---|---|---|
 | Domain classes, `save`/`delete`/`get`/`list`/`count`, dynamic finders (inclusive os booleanos: `findAllAtivo()`, `findAtivoByNome`), `findWhere`, HQL | ✅ | |
 | `constraints` (todas as nativas do Grails, `validator`, `unique` com escopo), `errors` | ✅ | `creditCard`, `scale`, `notEqual`, `shared`/`importFrom` ❌ |
-| `hasMany`, `belongsTo`, `mappedBy`, `transients`, `addTo`/`removeFrom`, cascata | ✅ | many-to-many ✅: dono é o lado de quem o outro faz `belongsTo`, tabela `dono_propriedade`, colunas `dono_id`/`alvo_id`. `hasOne` ✅ (ver a seção do app C); `embedded`, herança, coleções de tipos básicos ❌ |
+| `hasMany`, `belongsTo`, `mappedBy`, `transients`, `addTo`/`removeFrom`, cascata | ✅ | many-to-many ✅: dono é o lado de quem o outro faz `belongsTo`, tabela `dono_propriedade`, colunas `dono_id`/`alvo_id`. `hasOne` ✅ (ver a seção do app C); `embedded` ✅ (abaixo); herança, coleções de tipos básicos ❌ |
 | `static mapping` (table, version, sort, id generator, column/length/sqlType, autoTimestamp) | ✅ | Índices, cache, lazy/eager por propriedade ❌ |
 | `withTransaction`, `withNewTransaction`, `withSession`, `withNewSession` | ✅ | |
 | Eventos `beforeInsert`/`beforeUpdate`/`beforeDelete`/`beforeValidate`, `afterInsert`/`afterUpdate`/`afterDelete`/`afterLoad`, `dateCreated`/`lastUpdated` | ✅ | `before*` e `Pre*` também no flush de alterações sem `save()`. `onLoad` ❌ |
@@ -228,6 +228,7 @@ Na web e nas views, estes itens entraram:
 | Recurso | Status | Observações |
 |---|---|---|
 | Artefatos no pacote padrão (`UrlMappings`, `LoginController` sem `package`) | ✅ | Indexados pelo plugin Gradle (`class:` em `META-INF/grox/packages`) |
+| `embedded` (componente nas colunas do dono) | ✅ | Colunas `endereco_rua` (GORM); a classe do componente em `grails-app/domain` não vira entidade. Consulta pelo caminho, binding, JSON e scaffold (`fieldset`). Constraints do componente validadas no dono (campo `endereco.rua`; propriedades opcionais por padrão). Limites: um nível, só tipos simples |
 | `hasOne` (one-to-one com a FK no filho) | ✅ | Cascade all a partir do dono. Com filho multi-tenant, filho ausente vira `null` (many-to-one por `join-formula`; sem orphan removal) |
 | One-to-one sem `hasOne` (`Face { Nose nose }`, `Nose { belongsTo = [face: Face] }`) | ✅ | FK no dono (`face.nose_id`); o `belongsTo` do filho é o lado inverso, sem coluna. Com `hasMany` do mesmo tipo no dono ou mais de uma referência, o `belongsTo` fica many-to-one |
 | `principal as GrailsUser` (ou `as UserDetails`) | ✅ | Convertido a partir do `GroxUser`, com o id; sem a senha |

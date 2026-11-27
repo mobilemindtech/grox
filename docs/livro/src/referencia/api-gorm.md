@@ -140,6 +140,7 @@ O filtro de tenant (`_tenantId`) é recusado por essa API: use `Tenants.withoutI
 | `hasMany` | `[enderecos: Endereco, tags: String]` |
 | `belongsTo` | `[empresa: Empresa]` ou `Turma` |
 | `hasOne` | `[nariz: Nariz]` |
+| `embedded` | `['endereco']` (componente nas colunas do dono: `endereco_rua`...) |
 | `mappedBy` | `[enderecos: 'morador']` |
 | `transients` | `['nomeCompleto']` |
 | `constraints` | `{ nome blank: false, size: 2..100 }` |

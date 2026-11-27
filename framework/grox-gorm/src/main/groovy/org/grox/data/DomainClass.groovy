@@ -42,6 +42,8 @@ class DomainClass {
     /** {@code static hasOne = [perfil: Perfil]}. */
     Map<String, Class> hasOne = [:]
     Map<String, Class> belongsToMap = [:]
+    /** {@code static embedded = ['endereco']}: componentes gravados nas colunas desta tabela. */
+    List<String> embedded = []
     Set<Class> belongsToClasses = [] as Set
 
     DomainClass(Class<?> type) {
@@ -111,6 +113,12 @@ class DomainClass {
             result[p.name] = rules
         }
         constraints.each { k, v -> if (!result.containsKey(k) && !(persistentProperties[k]?.kind in [DomainProperty.Kind.ID, DomainProperty.Kind.VERSION])) result[k] = v }
+        // componentes: as constraints da classe do componente, no campo endereco.rua (propriedades opcionais por padrão)
+        persistentProperties.values().findAll { it.kind == DomainProperty.Kind.EMBEDDED }.each { DomainProperty p ->
+            ConstraintsBuilder.declared(p.referencedType).each { String k, Map<String, Object> v ->
+                if (p.embeddedProperties.containsKey(k)) result["${p.name}.${k}".toString()] = [nullable: true] + v
+            }
+        }
         result
     }
 
@@ -119,6 +127,7 @@ class DomainClass {
         Map<Class, DomainClass> all = [:]
         if (!parallel || types.size() < 8) {
             types.each { all[it] = new DomainClass(it).readStatics() }
+            withoutComponents(all)
             all.values().each { it.resolveProperties(all) }
             return all
         }
@@ -131,11 +140,24 @@ class DomainClass {
                 pool.submit({ new DomainClass(t).readStatics() } as java.util.concurrent.Callable<DomainClass>)
             }
             read.each { java.util.concurrent.Future<DomainClass> f -> DomainClass d = unwrap(f); all[d.type] = d }
+            withoutComponents(all)
             all.values().collect { DomainClass d -> pool.submit({ d.resolveProperties(all) } as Runnable) }.each { unwrap(it) }
         } finally {
             pool.shutdown()
         }
         all
+    }
+
+    /**
+     * A classe de um {@code embedded} declarada em {@code grails-app/domain} (no mesmo arquivo da domain, como no GORM)
+     * é um componente, não uma entidade: sai da lista (sem tabela própria).
+     */
+    private static void withoutComponents(Map<Class, DomainClass> all) {
+        Set<Class> components = [] as Set
+        all.values().each { DomainClass d ->
+            d.embedded.each { String n -> Class t = fields(d.type).find { it.name == n }?.type; if (t != null) components << t }
+        }
+        components.each { all.remove(it) }
     }
 
     private static <T> T unwrap(java.util.concurrent.Future<T> f) {
@@ -160,6 +182,8 @@ class DomainClass {
         } else if (bt instanceof Collection) {
             belongsToClasses.addAll((Collection<Class>) bt)
         }
+        Object emb = ClassUtils.staticProperty(type, 'embedded')
+        if (emb instanceof Collection) embedded = ((Collection) emb)*.toString()
         mapping = MappingDsl.evaluate(ClassUtils.staticProperty(type, 'mapping'))
         hibernateFilters = HibernateFilters.read(type)
         Object idSetting = mapping.settings.id
@@ -249,6 +273,11 @@ class DomainClass {
                         p.inverseJoinColumn = jt.column ?: "${snake(ClassUtils.propertyName(target.type))}_id".toString()
                     }
                 }
+            } else if (n in embedded) {
+                if (all.containsKey(f.type) || isBasic(f.type)) throw new IllegalStateException("${type.name}.embedded.${n}: ${f.type.name} não pode ser componente (domain class ou tipo simples)")
+                p.kind = DomainProperty.Kind.EMBEDDED
+                p.referencedType = f.type
+                p.embeddedProperties = componentProperties(n, f.type)
             } else if (hasOne.containsKey(n) && all.containsKey(hasOne[n])) {
                 // hasOne: one-to-one inverso; a chave estrangeira está na referência de volta do filho
                 p.kind = DomainProperty.Kind.ONE_TO_ONE
@@ -317,6 +346,27 @@ class DomainClass {
         String fromMap = belongsToMap.find { k, v -> v == owner }?.key
         if (fromMap) return fromMap
         fields(type).find { it.type == owner }?.name
+    }
+
+    /**
+     * Propriedades básicas do componente, com as colunas do GORM: {@code endereco} + {@code cep} → {@code endereco_cep}.
+     * Colunas aceitam nulo (o componente inteiro pode ser nulo); {@code maxSize}/{@code size} do componente dão o tamanho.
+     */
+    private static Map<String, DomainProperty> componentProperties(String owner, Class<?> component) {
+        Map<String, Map<String, Object>> rules = ConstraintsBuilder.declared(component)
+        Map<String, DomainProperty> result = [:]
+        for (Field f : fields(component)) {
+            String n = f.name
+            if (n in ['id', 'version', 'errors'] || !isBasic(f.type)) continue
+            String cap = n.capitalize()
+            if (!component.methods.any { it.name == 'set' + cap }) continue
+            def p = new DomainProperty(name: n, type: f.type, kind: DomainProperty.Kind.BASIC, nullable: true)
+            p.column.name = "${snake(owner)}_${snake(n)}".toString()
+            Object length = lengthFromConstraints(rules[n])
+            if (length) p.column.length = length
+            result[n] = p
+        }
+        result
     }
 
     private boolean hasAccessors(String n) {

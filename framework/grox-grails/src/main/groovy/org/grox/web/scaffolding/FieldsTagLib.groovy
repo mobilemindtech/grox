@@ -107,6 +107,7 @@ class FieldsTagLib implements TagLibApi {
 
     private String fieldHtml(Object bean, DomainProperty p, String prefix) {
         DomainClass dc = domainOf(bean.getClass())
+        if (p.kind == DomainProperty.Kind.EMBEDDED) return embeddedHtml(bean, dc, p, prefix)
         Map<String, Object> rules = constraintsOf(dc, p.name)
         boolean required = !(rules.nullable as boolean) && !(p.type in [boolean, Boolean])
         boolean invalid = bean.respondsTo('hasErrors') && bean.errors?.getFieldError(p.name) != null
@@ -116,6 +117,25 @@ class FieldsTagLib implements TagLibApi {
         sb << '<label for="' << name << '">' << Html.escape(label(dc, p))
         if (required) sb << '<span class="required-indicator">*</span>'
         sb << '</label>' << widget(bean, p, name, rules, required) << '</div>'
+        sb.toString()
+    }
+
+    /**
+     * Componente ({@code embedded}): um {@code fieldset} com um campo por propriedade ({@code endereco.rua}), como no
+     * plugin fields do Grails; o binding de {@code params.endereco} preenche o componente. Rótulo
+     * {@code pessoa.endereco.rua.label}.
+     */
+    private String embeddedHtml(Object bean, DomainClass dc, DomainProperty p, String prefix) {
+        Object comp = bean."${p.name}" ?: p.referencedType.getDeclaredConstructor().newInstance()
+        Map<String, Map<String, Object>> rules = org.grox.data.validation.ConstraintsBuilder.declared(p.referencedType)
+        StringBuilder sb = new StringBuilder('<fieldset class="embedded ' + p.name + '"><legend>' + Html.escape(label(dc, p)) + '</legend>')
+        p.embeddedProperties.values().each { DomainProperty c ->
+            String name = prefix + p.name + '.' + c.name
+            String text = g.message(code: "${dc.propertyName}.${p.name}.${c.name}.label", default: naturalName(c.name)).toString()
+            sb << '<div class="fieldcontain"><label for="' << name << '">' << Html.escape(text) << '</label>' <<
+                    widget(comp, c, name, [nullable: true] + (rules[c.name] ?: [:]), false) << '</div>'
+        }
+        sb << '</fieldset>'
         sb.toString()
     }
 
@@ -186,6 +206,10 @@ class FieldsTagLib implements TagLibApi {
             return g.link([controller: ClassUtils.propertyName(p.referencedType), action: 'show', id: v.id], Html.escape(v.toString())).toString()
         }
         if (v instanceof Collection) return Html.escape(((Collection) v)*.toString().join(', '))
+        if (p.kind == DomainProperty.Kind.EMBEDDED) {
+            // componente sem toString próprio: os valores preenchidos, na ordem das propriedades
+            return Html.escape(p.embeddedProperties.keySet().collect { v[it] }.findAll { it != null }*.toString().join(', '))
+        }
         if (v instanceof Boolean) return Html.escape(g.message(code: "boolean.${v}", default: v.toString()).toString())
         if (v instanceof Date) return g.formatDate(date: v).toString()
         if (v instanceof Temporal) return Html.escape(v.toString().replace('T', ' '))

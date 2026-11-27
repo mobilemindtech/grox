@@ -46,6 +46,10 @@ class QueryContext {
         for (int i = 0; i < parts.size() - 1; i++) {
             String p = parts[i]
             DomainProperty prop = d?.getAt(p)
+            if (prop?.kind == DomainProperty.Kind.EMBEDDED && i == parts.size() - 2) {
+                if (!prop.embeddedProperties.containsKey(parts.last())) throw new IllegalArgumentException("propriedade desconhecida em ${prop.referencedType.simpleName}: ${parts.last()} (caminho ${dotted})")
+                return from.get(p).get(parts.last())
+            }
             if (prop == null || !prop.association) throw new IllegalArgumentException("${d?.name}.${p} não é uma associação (caminho ${dotted})")
             prefix += (prefix ? '.' : '') + p
             From current = from
@@ -78,6 +82,7 @@ class QueryContext {
         DomainClass d = domain
         for (int i = 0; i < parts.size() - 1; i++) {
             DomainProperty prop = d?.getAt(parts[i])
+            if (prop?.kind == DomainProperty.Kind.EMBEDDED && i == parts.size() - 2) return prop.embeddedProperties.containsKey(parts.last())
             if (prop == null || !prop.association || prop.referencedType == null) return false
             d = Gorm.domain(prop.referencedType)
         }
@@ -89,6 +94,7 @@ class QueryContext {
         DomainClass d = domain
         for (int i = 0; i < parts.size() - 1; i++) {
             DomainProperty prop = d?.getAt(parts[i])
+            if (prop?.kind == DomainProperty.Kind.EMBEDDED && i == parts.size() - 2) return prop.embeddedProperties[parts.last()]
             if (prop?.referencedType == null) return null
             d = Gorm.domain(prop.referencedType)
         }

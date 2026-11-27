@@ -19,6 +19,10 @@ class DomainJson {
                     Object ref = p.get(e)
                     out[p.name] = ref == null ? null : [id: Gorm.domain(ref.getClass()).identity.get(ref)]
                 }
+                case DomainProperty.Kind.EMBEDDED -> {
+                    Object c = p.get(e)
+                    out[p.name] = c == null ? null : p.embeddedProperties.keySet().collectEntries { String n -> [(n): c[n]] }
+                }
                 case DomainProperty.Kind.ELEMENT_COLLECTION -> {
                     Collection c = (Collection) p.get(e)
                     out[p.name] = c == null ? [] : new ArrayList(c)

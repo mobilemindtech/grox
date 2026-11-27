@@ -391,6 +391,31 @@ A chave estrangeira fica no filho (`nariz.rosto_id`), como no GORM; o dono propa
 
 **Filho multi-tenant** (`class Anamnese implements MultiTenant<Anamnese>`): o `@TenantId` do Hibernate 7 filtra também a carga por chave, e no one-to-one inverso um filho ausente dava `EntityFilterException`, porque o Hibernate não distingue "ausente" de "filtrado". Nesse caso o Grox mapeia a propriedade do dono como many-to-one só leitura, com `join-formula` (`(select min(c.id) from anamnese c where c.cliente_id = id)`) e `not-found IGNORE`: filho ausente vira `null`, como no GORM. A carga é eager e em lote (`default_batch_fetch_size`). O Grox faz o cascade: grava o filho depois do pai (no `save()` e no persist por cascade de outra entidade) e o apaga antes do pai. Limites: a fórmula usa os nomes físicos do `snake_case` (tabela ou coluna com palavra reservada não é escapada), e atribuir `null` ao hasOne não apaga o filho (sem orphan removal).
 
+### Componentes com `embedded`
+
+```groovy
+class Pessoa {
+    String nome
+    Endereco endereco
+    static embedded = ['endereco']
+}
+
+class Endereco {            // no mesmo arquivo da domain, como no GORM, ou em src/main/groovy
+    String rua
+    String cidade
+    Uf uf
+    static constraints = { rua maxSize: 60 }
+}
+```
+
+As propriedades do componente viram colunas da tabela do dono, com os nomes do GORM: `endereco_rua`, `endereco_cidade`, `endereco_uf`. A classe do componente não é entidade (sem tabela, sem `id`, sem `Endereco.get()`), mesmo declarada em `grails-app/domain`. O componente é obrigatório por padrão (`endereco nullable: true` nas constraints do dono para torná-lo opcional). As constraints da classe do componente valem no `validate()` do dono, com o erro no campo `endereco.rua` (código `pessoa.endereco.rua.maxSize.exceeded`); as propriedades do componente são opcionais por padrão, e o `maxSize`/`size` também define o tamanho da coluna. Só propriedades de tipos simples (texto, números, datas, enums) são mapeadas.
+
+- **Consultas:** pelo caminho, sem join: `Pessoa.where { endereco.cidade == 'Curitiba' }`, `createCriteria { eq('endereco.uf', 'PR'); order('endereco.cidade') }`, `findAllWhere('endereco.cidade': x)`. Os valores são convertidos para o tipo da propriedade do componente (`'PR'` vira o enum).
+- **Binding:** `new Pessoa(params)` com `endereco.rua`/`endereco.cidade` (ou um mapa aninhado no JSON) preenche o componente.
+- **JSON:** o componente sai como objeto aninhado (`"endereco": {"rua": ..., "cidade": ...}`).
+- **Scaffold:** o formulário mostra um `fieldset` com um campo por propriedade (rótulos `pessoa.endereco.rua.label`); a exibição lista os valores preenchidos.
+- **Limites:** um nível só (componente dentro de componente não) e sem associações dentro do componente.
+
 ### Filtros do Hibernate (plugin hibernate-filter)
 
 ```groovy

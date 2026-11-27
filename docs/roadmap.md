@@ -34,7 +34,7 @@ Status: **não iniciado**. Ordem sugerida:
   - [ ] Benchmark em máquina dedicada (gerador em outra máquina) e escolha do `grox.controllers.poolSize` padrão
 - [ ] **Dados**
   - [x] Many-to-many (`hasMany` nos dois lados), feito no piloto
-  - [ ] `hasOne` e `embedded`
+  - [x] `hasOne` (feito com o app C) e `embedded` (2026-11-27: colunas do GORM, consulta pelo caminho, binding, validação, JSON e scaffold; um nível e só tipos simples)
   - [ ] Herança de domain classes
   - [x] Dirty checking (`isDirty`, `getPersistentValue`) e listeners `Pre/Post*` (`@Listener`), feitos no piloto
   - [x] Eventos de domain `after*` e `beforeValidate`; `Pre*Update` também no flush automático (2026-11-26: `DomainEventBridge`)
@@ -244,7 +244,7 @@ Iniciada em 2026-10-10 em `docs/livro/` (`docs/livro/build.sh` gera e confere li
 
 ## Depois (sem prioridade definida)
 
-- `hasOne`, `embedded`, herança de domain classes.
+- Herança de domain classes (`hasOne` e `embedded` feitos).
 - Migrações de esquema (Flyway ou Liquibase) no lugar do `dbCreate: update`.
 - `as XML`, marshallers de JSON customizados.
 - Módulo separado para as domain classes, para compilar mais rápido em projetos grandes. No app A (1.382 classes, um módulo), mudar um controller, service ou classe de `src/` recompila 1 classe (2–3 s). Mudar a domain `Cidade`, referenciada por 16 arquivos, recompila **656** classes (~24 s): o Groovy é dinâmico, e o Gradle recompila tudo que depende da classe, direta ou indiretamente. Separar só as domain classes (a camada estável da recarga) resolveria; services, taglibs e controllers em módulos próprios não ganham nada. É preciso:

@@ -26,7 +26,8 @@ class RelatorioController {
 - **Validação que falhou:** a entidade inválida fica somente leitura e não é gravada por um commit posterior. Chame `discard()` antes de continuar se outra transação da mesma requisição vier depois.
 - **Fora de actions** (BootStrap, jobs, threads próprias, testes), cada chamada do GORM abre e fecha a sua sessão; agrupe com `withTransaction` ou `withNewSession`.
 - **Tarefas assíncronas** (`task { }`) têm sessão de dados própria: entidades carregadas na action ficam desanexadas dentro delas.
-- **Eventos e auditoria** vêm do `save()`/`delete()`. Uma alteração gravada só pelo flush automático não dispara `PreUpdate` nem é auditada.
+- **Eventos e auditoria** valem também para o que só o flush grava (alteração por dirty checking, filho salvo por cascata), como no GORM: `beforeUpdate`, os listeners `Pre*` e o audit log rodam no flush, e o que já passou pelo `save()` não dispara de novo.
+- **`embedded`:** as propriedades do componente são opcionais por padrão (declare `nullable: false` nas constraints do componente para exigir); os erros ficam no campo `endereco.rua` do dono. Componente dentro de componente e associações no componente não são suportados.
 
 ## Sem container Servlet
 

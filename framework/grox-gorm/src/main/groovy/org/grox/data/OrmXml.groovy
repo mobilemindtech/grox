@@ -21,6 +21,10 @@ class OrmXml {
         }
         Map<Class, DomainClass> byType = domains.collectEntries { [(it.type): it] }
         domains.each { entity(sb, it, byType) }
+        // componentes (embedded): um <embeddable> por classe; as colunas de cada dono vêm do <attribute-override>
+        Map<Class, DomainProperty> components = [:]
+        domains.each { d -> d.persistentProperties.values().findAll { it.kind == DomainProperty.Kind.EMBEDDED }.each { components.putIfAbsent(it.referencedType, it) } }
+        components.each { Class type, DomainProperty p -> embeddable(sb, type, p) }
         sb << '</entity-mappings>\n'
         sb.toString()
     }
@@ -121,8 +125,25 @@ class OrmXml {
                     "<collection-table name=\"${esc(p.joinTable)}\"><join-column name=\"${esc(p.joinColumn)}\"/></collection-table>" <<
                     '</element-collection>\n'
         }
+        props.findAll { it.kind == DomainProperty.Kind.EMBEDDED }.each { DomainProperty p ->
+            sb << "      <embedded name=\"${p.name}\">"
+            p.embeddedProperties.values().each { DomainProperty c ->
+                sb << "<attribute-override name=\"${c.name}\">" << column(c, true) << '</attribute-override>'
+            }
+            sb << '</embedded>\n'
+        }
         d.transientFields.unique().each { sb << "      <transient name=\"${it}\"/>\n" }
         sb << '    </attributes>\n  </entity>\n'
+    }
+
+    /** A classe do componente: as propriedades básicas e, como transientes, os demais campos (id/version da AST, por exemplo). */
+    private static void embeddable(StringBuilder sb, Class type, DomainProperty p) {
+        sb << "  <embeddable class=\"${type.name}\" access=\"FIELD\" metadata-complete=\"true\">\n    <attributes>\n"
+        p.embeddedProperties.values().each { DomainProperty c ->
+            sb << "      <basic name=\"${c.name}\">" << (c.type.enum ? '<enumerated>STRING</enumerated>' : '') << '</basic>\n'
+        }
+        DomainClass.fields(type).findAll { !p.embeddedProperties.containsKey(it.name) }.each { sb << "      <transient name=\"${it.name}\"/>\n" }
+        sb << '    </attributes>\n  </embeddable>\n'
     }
 
     /**

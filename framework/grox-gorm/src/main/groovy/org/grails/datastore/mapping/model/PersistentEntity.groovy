@@ -62,6 +62,7 @@ class PersistentEntity {
             case DomainProperty.Kind.ONE_TO_MANY: return new OneToMany(this, p)
             case DomainProperty.Kind.MANY_TO_MANY: return new ManyToMany(this, p)
             case DomainProperty.Kind.ELEMENT_COLLECTION: return new Basic(this, p)
+            case DomainProperty.Kind.EMBEDDED: return new org.grails.datastore.mapping.model.types.Embedded(this, p)
             default: return new Simple(this, p)
         }
     }

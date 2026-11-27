@@ -46,8 +46,9 @@ class Validator {
     static void validate(Object target, Map<String, Map<String, Object>> constraints, ValidationErrors errors, List<String> fields = null) {
         Class<?> type = ClassUtils.userClass(target.getClass())
         constraints.each { String prop, Map<String, Object> rules ->
-            if (fields != null && !(prop in fields)) return
-            Object value = target.hasProperty(prop) ? target[prop] : null
+            int dot = prop.indexOf('.')
+            if (fields != null && !(prop in fields) && !(dot > 0 && prop.substring(0, dot) in fields)) return
+            Object value = dot < 0 ? (target.hasProperty(prop) ? target[prop] : null) : valueAt(target, prop)
             new Validator(target: target, type: type, prop: prop, value: value, errors: errors).check(rules)
         }
     }
@@ -124,6 +125,16 @@ class Validator {
         errors.add(new FieldError(objectName: type.name, field: prop, rejectedValue: value,
                 codes: ["${type.name}.${prop}.${code}".toString(), "${ClassUtils.propertyName(type)}.${prop}.${code}".toString(), c[1]],
                 arguments: ([prop, type.simpleName, value] + (params as List)) as Object[]))
+    }
+
+    /** {@code endereco.rua}: propriedade de um componente ({@code embedded}); null se o componente for null. */
+    private static Object valueAt(Object target, String path) {
+        Object current = target
+        for (String part : path.tokenize('.')) {
+            if (current == null || !current.hasProperty(part)) return null
+            current = current[part]
+        }
+        current
     }
 
     private static Integer lengthOf(Object v) {
