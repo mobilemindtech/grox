@@ -29,19 +29,36 @@ class ApplicationTagLib implements TagLibApi {
 
     static final List<String> LINK_ATTRS = ['controller', 'action', 'id', 'params', 'url', 'uri', 'absolute', 'base', 'fragment', 'mapping']
 
+    @groovy.transform.CompileStatic
     static Map<String, Object> extractLinkAttrs(Map attrs) {
         Map<String, Object> link = [:]
-        LINK_ATTRS.each { if (attrs.containsKey(it)) link[it] = attrs.remove(it) }
+        for (String k : LINK_ATTRS) if (attrs.containsKey(k)) link[k] = attrs.remove(k)
         link
+    }
+
+    /** O corpo de uma tag escrito em {@code w} (as tags mais usadas são métodos {@code @CompileStatic}). */
+    @groovy.transform.CompileStatic
+    static void writeBody(Writer w, Closure body) {
+        Object b = body?.call()
+        if (b != null) w.write(b.toString())
     }
 
     def createLink = { Map attrs ->
         webRequest.links.link(attrs, controllerName)
     }
 
-    def link = { Map attrs, body ->
+    // as tags mais usadas são métodos @CompileStatic: como closures, cada acesso passava pelo despacho dinâmico
+    @groovy.transform.CompileStatic
+    void link(Map attrs, Closure body) {
         String href = webRequest.links.link(extractLinkAttrs(attrs), controllerName)
-        out << '<a href="' << Html.escape(href) << '"' << Html.attributes(attrs) << '>' << body() << '</a>'
+        Writer w = out
+        w.write('<a href="')
+        w.write(Html.escape(href))
+        w.write('"')
+        w.write(Html.attributes(attrs))
+        w.write('>')
+        writeBody(w, body)
+        w.write('</a>')
     }
 
     /** {@code <g:resource dir="css" file="app.css"/>} → {@code /static/css/app.css} */
@@ -52,12 +69,15 @@ class ApplicationTagLib implements TagLibApi {
     }
 
     /** {@code <g:message code="x" args="${[1]}" default="..."/>} ou {@code <g:message error="${erro}"/>} */
-    def message = { Map attrs ->
-        def messages = webRequest.messages
-        String text = attrs.error instanceof MessageResolvable ?
-                messages.getMessage((MessageResolvable) attrs.error, webRequest.locale) :
-                messages.getMessage(attrs.code?.toString(), attrs.args as List, attrs.default?.toString(), webRequest.locale)
-        out << (attrs.encodeAs?.toString()?.toLowerCase() == 'raw' ? text : Html.escape(text))
+    @groovy.transform.CompileStatic
+    void message(Map attrs) {
+        org.grox.view.ViewRequest wr = webRequest
+        org.grox.i18n.MessageSource messages = wr.messages
+        Object error = attrs.get('error')
+        String text = error instanceof MessageResolvable ?
+                messages.getMessage((MessageResolvable) error, wr.locale) :
+                messages.getMessage(attrs.get('code')?.toString(), (List) (attrs.get('args') as List), attrs.get('default')?.toString(), wr.locale)
+        out.write(attrs.get('encodeAs')?.toString()?.toLowerCase() == 'raw' ? (text ?: '') : Html.escape(text))
     }
 
     /** {@code <g:formatDate date="${d}" format="dd/MM/yyyy"/>} (Date ou java.time). */
@@ -89,22 +109,24 @@ class ApplicationTagLib implements TagLibApi {
                 '</p><pre class="stack">' << Html.escape(sw.toString()) << '</pre></div>'
     }
 
-    def formatDate = { Map attrs ->
-        Object date = attrs.date
+    @groovy.transform.CompileStatic
+    void formatDate(Map attrs) {
+        Object date = attrs.get('date')
         if (date == null) return
-        String format = attrs.format?.toString() ?: 'yyyy-MM-dd HH:mm:ss'
-        Locale locale = attrs.locale instanceof Locale ? (Locale) attrs.locale : (webRequest?.locale ?: Locale.default)
+        String format = attrs.get('format')?.toString() ?: 'yyyy-MM-dd HH:mm:ss'
+        Object loc = attrs.get('locale')
+        Locale locale = loc instanceof Locale ? (Locale) loc : (webRequest?.locale ?: Locale.default)
         // timeZone: TimeZone ou id ("UTC", "America/Sao_Paulo"), como no Grails
         // TimeZone.getTimeZone(String) é synchronized no JDK: cache por id
-        TimeZone tz = attrs.timeZone instanceof TimeZone ? (TimeZone) attrs.timeZone :
-                (attrs.timeZone ? timeZone(attrs.timeZone.toString()) : null)
+        Object zone = attrs.get('timeZone')
+        TimeZone tz = zone instanceof TimeZone ? (TimeZone) zone : (zone ? timeZone(zone.toString()) : null)
         if (date instanceof TemporalAccessor) {
-            def f = DateTimeFormatter.ofPattern(format, locale)
-            out << Html.escape((tz ? f.withZone(tz.toZoneId()) : f).format((TemporalAccessor) date))
+            DateTimeFormatter f = DateTimeFormatter.ofPattern(format, locale)
+            out.write(Html.escape((tz ? f.withZone(tz.toZoneId()) : f).format((TemporalAccessor) date)))
         } else {
             def f = new SimpleDateFormat(format, locale)
             if (tz) f.timeZone = tz
-            out << Html.escape(f.format((Date) date))
+            out.write(Html.escape(f.format((Date) date)))
         }
     }
 

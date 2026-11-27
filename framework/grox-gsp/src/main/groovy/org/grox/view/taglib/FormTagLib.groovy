@@ -18,19 +18,31 @@ class FormTagLib implements TagLibApi {
      * {@code <g:form action="save" method="PUT">}: métodos além de GET/POST viram
      * POST com o campo {@code _method} (interpretado pelo dispatcher).
      */
-    def form = { Map attrs, body ->
+    @groovy.transform.CompileStatic
+    void form(Map attrs, Closure body) {
         String method = (attrs.remove('method') ?: 'POST').toString().toUpperCase()
-        Map link = ApplicationTagLib.extractLinkAttrs(attrs)
-        String action = link.url instanceof CharSequence ? link.url.toString() :
+        Map<String, Object> link = ApplicationTagLib.extractLinkAttrs(attrs)
+        Object url = link.get('url')
+        String action = url instanceof CharSequence ? url.toString() :
                 (link ? webRequest.links.link(link, controllerName) : request.path)
-        out << '<form action="' << Html.escape(action) << '" method="' << (method == 'GET' ? 'get' : 'post') << '"' << Html.attributes(attrs) << '>'
-        if (!(method in ['GET', 'POST'])) out << '<input type="hidden" name="_method" value="' << method << '"/>'
-        if (method != 'GET' && hiddenFields != null) {
-            hiddenFields.apply(request).each { String k, String v ->
-                out << '<input type="hidden" name="' << Html.escape(k) << '" value="' << Html.escape(v) << '"/>'
+        Writer w = out
+        w.write('<form action="')
+        w.write(Html.escape(action))
+        w.write(method == 'GET' ? '" method="get"' : '" method="post"')
+        w.write(Html.attributes(attrs))
+        w.write('>')
+        if (method != 'GET' && method != 'POST') w.write('<input type="hidden" name="_method" value="' + method + '"/>')
+        Function<GroxRequest, Map<String, String>> fields = hiddenFields
+        if (method != 'GET' && fields != null) {
+            Map<String, String> hidden = fields.apply(request)
+            if (hidden) {
+                for (Map.Entry<String, String> e : hidden.entrySet()) {
+                    w.write('<input type="hidden" name="' + Html.escape(e.key) + '" value="' + Html.escape(e.value) + '"/>')
+                }
             }
         }
-        out << body() << '</form>'
+        ApplicationTagLib.writeBody(w, body)
+        w.write('</form>')
     }
 
     /** {@code <g:uploadForm action="upload">}: form com {@code enctype="multipart/form-data"}. */

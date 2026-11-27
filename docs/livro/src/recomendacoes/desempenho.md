@@ -109,6 +109,7 @@ bench/build/install/bench/bin/bench http://localhost:8080/rota 64 30 15 "Authori
 - Meça a aplicação **empacotada** (`installDist`), nunca o `run` (GSP recompilável, JIT só C1).
 - Aqueça o JIT (15 a 30 s) antes de medir.
 - Compare versões em rodadas A/B alternadas, na mesma máquina e sem outras cargas. Variações de ±15% numa máquina ocupada são ruído.
+- Para páginas com login, mande o cookie de uma sessão (`"Cookie: GROXSESSIONID=..."`), não Basic: o Basic faz bcrypt a cada requisição e domina a medição. No repositório do Grox, o `bench/run-logado.sh` faz o login e mostra também o tempo de CPU do processo por requisição, que outros processos na máquina afetam menos que a vazão.
 - Não use o `HttpClient` do JDK como gerador: ele vira o gargalo.
 
 Para achar onde está o tempo, use o JFR:

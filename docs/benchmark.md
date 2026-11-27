@@ -11,6 +11,7 @@ bench/build/install/bench/bin/bench http://host:8080/x 128 30 5 "Authorization: 
 
 - **Grails x Grox:** `bench/run-livros.sh grails|grox|plain` sobe a app de referência numa das três versões e mede texto, GSP e JSON com 64 e com 1 conexão (ver [abaixo](#grails-x-grox-compat-x-grox-puro-2026-10-10)).
 - **O que o `run.sh` faz:** sobe o `sample-app` empacotado (views pré-compiladas, `grox.gsp.reload=false`, ambiente development com os dados do BootStrap), obtém um JWT de admin para as rotas `/api/**` e roda o `LoadGen` em cada URL.
+- **Páginas com login:** `bench/run-logado.sh rotulo /usuario/index` faz login por formulário e mede com o cookie da sessão (o Basic faria bcrypt a cada requisição); mostra também o tempo de CPU do processo por requisição. Com `DIST=<installDist de outra versão>`, mede uma versão anterior para comparar em A/B.
 - **O `LoadGen`** (`bench/`): N conexões HTTP/1.1 keep-alive (`Content-Length` ou `chunked`), uma virtual thread por conexão com socket bloqueante, uma requisição por vez, aquecimento separado da medição e histograma logarítmico de latência (p50, p90, p99, p99.9). Não use o `HttpClient` do JDK como gerador: ele é lento o bastante para virar o gargalo.
 
 ## Tempo de subida
@@ -100,6 +101,23 @@ A/B alternado do `sample-plain` (A, C, C, A): texto de 12.834 e 16.430 para 23.1
 - **Caminho dos controllers em `@CompileStatic`** (`ControllerExecutor`, `WebRequest`, `ActionMethod`, `ActorPool.submit`, `Metrics.end`, `Management.handles`, `Conversions.isSimple`, auxiliares do `HttpPipeline`). A/B alternado do `bench/livros` (A, B, B, A) com 1 conexão: texto de 0,35 e 0,36 para 0,31 ms; JSON de 0,49 e 0,57 para 0,39 e 0,46 ms; GSP de 0,85 e 0,86 para 0,76 e 0,80 ms. Com 64 conexões, texto cerca de +15%, o resto dentro do ruído. O salto para o ator do controller continua: é o modelo de concorrência.
 - **"Requisições simultâneas na mesma sessão" era artefato de medição.** Uma rodada mostrou a GSP com 64 conexões e o mesmo cookie em cerca de 1.300 req/s, contra cerca de 5.700 sem cookie. O perfil JFR dos dois casos tem o mesmo custo por método, sem disputa de trava: o caso com cookie rodava sempre primeiro, com o JIT ainda frio. Alternando os dois na mesma JVM, depois de 50 s de aquecimento: 5.773, 5.983 e 5.777 req/s com cookie; 4.923, 6.399 e 6.723 sem.
 - **Aquecimento da GSP:** a página só chega a cerca de 6.000 req/s depois de quase 1 minuto de carga; com os 20 s do `run-livros.sh`, os números da GSP saem mais baixos e mais instáveis (por isso o intervalo largo nas tabelas). Para comparar GSPs, use `WARM=60`.
+
+## Tags nativas em `@CompileStatic` (2026-11-26)
+
+`/usuario/index` do sample-app (lista com `g:link`, `g:form`, `g:paginate`, `g:sortableColumn`, `g:message`, `g:formatDate`), logado por sessão (cookie, sem o bcrypt do Basic). Perfil JFR antes da mudança, com 1 conexão, por camada: tags 20%, Hibernate 19%, segurança 9%, GSP 7,5%, SiteMesh 6,5%, Netty 6%. Nas tags: `g:link` 63 amostras, `g:form` 55, `g:paginate` 40, `g:message` 32, `g:formatDate` 18, `g:sortableColumn` 15.
+
+As seis viraram métodos `@CompileStatic` (antes, closures: cada acesso a `webRequest`, `out`, `attrs` passava pelo despacho dinâmico). A base e a versão nova empacotadas, alternadas (A, B, A, B), 30 s de aquecimento e 15 s de medição; "CPU/req" é o tempo de CPU do processo dividido pelas requisições da janela (menos sensível a outros processos).
+
+| | Dupla 1: A → B | Dupla 2: A → B |
+|---|---:|---:|
+| p50 com 1 conexão | 10,83 → 9,43 ms | 11,52 → 10,46 ms |
+| CPU/req com 1 conexão | 19,47 → 17,95 ms | 21,76 → 21,62 ms |
+| req/s com 64 conexões | 1.897 → 2.073 | 762 → 871 |
+| CPU/req com 64 conexões | 3,50 → 3,15 ms | 8,71 → 7,88 ms |
+
+- **Cerca de 10% na página**, nas duas duplas e nas duas métricas de carga.
+- A segunda dupla rodou com a máquina mais lenta (provável redução de frequência da CPU depois de carga sustentada): vale a comparação dentro de cada dupla, não entre elas.
+- Script: `bench/run-logado.sh rotulo /usuario/index` (login por formulário, cookie no gerador de carga, CPU do processo por `/proc/<pid>/stat`; `DIST=` aponta outra distribuição para o A/B). O `bench/run.sh` mede rotas sem login.
 
 ## Memória: Grails x Grox (2026-10-31)
 
@@ -244,7 +262,7 @@ Perfil da `/usuario/index` do sample-app com 1 conexão (JFR, só a janela de me
 
 | Fase | ms | Melhoria prevista |
 |---|---:|---|
-| Tags | 2,7 | Tags nativas em `@CompileStatic` (hoje closures dinâmicas: cada `webRequest.ctx.links...` e `out << ...` passa pelo indy). `g:link` é a maior, seguida de `sortableColumn`, `message`, `form` e `paginate` |
+| Tags | 2,7 | Tags nativas em `@CompileStatic`: feito para `g:link`, `form`, `paginate`, `message`, `formatDate` e `sortableColumn` (cerca de 10% na página, ver acima); faltam as demais e a `AssetTagLib` |
 | Banco | 2,5 | HQL gerado e em cache para consultas repetidas (a interpretação SQM e a hidratação dominam; o H2 é 0,3 ms) |
 | Action | 2,1 | Proxy dos services, `DetachedCriteria`, `respond`: espalhado, nenhum item acima de 0,15 ms |
 | Virtual threads e despacho solto | 1,8 | Menos saltos de thread nas rotas simples |
