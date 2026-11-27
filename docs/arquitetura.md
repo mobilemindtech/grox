@@ -170,7 +170,7 @@ O runtime expõe os módulos com `runtime.module(GormModule)`; por compatibilida
 
 - **Mapeamento:** as entidades são POGOs sem anotações, mapeadas por um `orm.xml` gerado em runtime. Os nomes físicos ficam em snake_case (`CamelCaseToUnderscoresNamingStrategy`) e palavras reservadas são citadas.
 - **Métodos estáticos:** os do trait (`Usuario.get`, `list`, dynamic finders via `$static_methodMissing`) delegam para `Gorm.api(this)`. Em método estático de trait, `this` é a classe concreta.
-- **Consultas:** `list`, os finders e `findAllWhere` usam a Criteria API. `sort` só aceita propriedades persistentes. `executeQuery`, `findAll(hql)` e `executeUpdate` usam HQL.
+- **Consultas:** `where`/`DetachedCriteria`/`createCriteria` (`list`, `count`, `get`) geram HQL a partir da árvore de critérios (`HqlQuery`), para o Hibernate reaproveitar o plano; projeções, `deleteAll`/`updateAll`, `list` da domain, os finders e `findAllWhere` usam a Criteria API. `sort` só aceita propriedades persistentes. `executeQuery`, `findAll(hql)` e `executeUpdate` usam HQL.
 - **`save()`:** timestamps, `beforeInsert`/`beforeUpdate`, `validate()` e depois `persist`, ou `merge` se a entidade estiver destacada. Tudo em `withTransaction`: participa da transação aberta ou faz commit ao final.
 - **Validação:** `Validator` aplica as constraints com os mesmos códigos e argumentos do Grails. Em domain classes, as propriedades são `nullable: false` por padrão (menos `dateCreated`/`lastUpdated`). As mensagens vêm da aplicação e, na falta delas, de `org/grox/i18n/messages*.properties`.
 
@@ -220,7 +220,7 @@ O runtime expõe os módulos com `runtime.module(GormModule)`; por compatibilida
 | D16 | Multi-tenancy só DISCRIMINATOR, com `@TenantId` nativo do Hibernate via `<tenant-id>` no `orm.xml` e o tenant vindo do usuário | Pedido do projeto. O filtro nativo cobre HQL, Criteria e carga por id, sem reescrever consultas |
 | D17 | JWT HS256 implementado sem biblioteca | Tokens simples (assinatura e expiração). Evita uma dependência a mais |
 | D18 | `where { }` por AST que reescreve o **corpo** do closure (a closure é mantida) | O `==` e o `&&` não são capturáveis em runtime. Manter a closure preserva o escopo de variáveis locais. Com a domain class conhecida os erros são de compilação; em receptores desconhecidos, a reescrita é silenciosa |
-| D19 | Um motor único (`QueryRunner` + `Criterion`, JPA Criteria) para where, createCriteria, finders e tenancy | Joins, conversão de tipos e paginação num só lugar. O filtro de tenant do Hibernate vale para todos |
+| D19 | Um motor único (`QueryRunner` + `Criterion`) para where, createCriteria, finders e tenancy; cada critério gera JPA Criteria e HQL (`toHql`), e `list`/`count` executam o HQL | Joins, conversão de tipos e paginação num só lugar. O filtro de tenant do Hibernate vale para todos. O HQL entra no cache de planos do Hibernate pela string (com filtro habilitado, como o `_tenantId` do `@TenantId`, o Hibernate 7.4 só reaproveita a análise do HQL, não a tradução para SQL) |
 | D20 | Views das actions adiadas até depois dos interceptors | Permite `after()` alterar `model`/`view`, como no Grails |
 | D22 | Sessão Hibernate preguiçosa por action | Actions sem banco não pagam abertura de sessão nem resolução de tenant (medido: era o maior custo por requisição) |
 | D23 | Desligamento conta requisições no handler do Netty até a escrita terminar | O contador das métricas zerava antes da escrita, e o fechamento dos event loops descartava a resposta |

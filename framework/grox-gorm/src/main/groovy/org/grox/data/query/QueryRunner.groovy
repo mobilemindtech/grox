@@ -11,7 +11,11 @@ import org.grox.data.GormStaticApi
 import org.grox.data.Persistence
 import org.hibernate.Session
 
-/** Executa critérios, ordenação, paginação e projeções via JPA Criteria. */
+/**
+ * Executa critérios, ordenação, paginação e projeções. {@code list}, {@code count} e {@code unique} usam HQL gerado
+ * da árvore de critérios ({@link HqlQuery}): a mesma forma de consulta gera a mesma string, e o Hibernate reaproveita
+ * o plano traduzido. Projeções, {@code deleteAll} e {@code updateAll} usam a JPA Criteria.
+ */
 class QueryRunner {
 
     final GormStaticApi api
@@ -41,19 +45,54 @@ class QueryRunner {
     List list() {
         Persistence.withSession { Session s ->
             api.guard(s)
-            CriteriaBuilder cb = s.criteriaBuilder
-            if (projections) return projected(s, cb)
-            CriteriaQuery q = cb.createQuery(api.type)
-            Root root = q.from(api.type)
-            def qc = new QueryContext(cb, root, api.domain)
-            q.select(root)
-            if (distinct) q.distinct(true)
-            if (criteria) q.where(Where.and(criteria as Criterion[]).toPredicate(qc))
-            List<Order> os = ordering(qc)
-            if (os) q.orderBy(os)
-            else defaultOrder(qc, q)
-            paginate(s.createQuery(q)).resultList
+            if (projections) return projected(s, s.criteriaBuilder)
+            selectList(s)
         }
+    }
+
+    @groovy.transform.CompileStatic
+    private List selectList(Session s) {
+        HqlQuery h = new HqlQuery(api.domain)
+        String where = whereHql(h)
+        String order = orderHql(h)
+        String hql = 'select ' + (distinct ? 'distinct ' : '') + HqlQuery.ROOT + ' from ' + entityName(s) + ' ' + HqlQuery.ROOT +
+                h.joinClause + (where ? ' where ' + where : '') + (order ? ' order by ' + order : '')
+        def q = s.createSelectionQuery(hql, api.type)
+        bind(q, h)
+        if (offset != null && offset > 0) q.firstResult = offset    // negativo: 0, como no GORM
+        if (max) q.maxResults = max
+        q.resultList
+    }
+
+    @groovy.transform.CompileStatic
+    private String whereHql(HqlQuery h) {
+        criteria ? Where.and(criteria as Criterion[]).toHql(h) : null
+    }
+
+    /** {@code sort}/{@code order} pedidos ou, sem eles, o {@code sort} do mapping. */
+    @groovy.transform.CompileStatic
+    private String orderHql(HqlQuery h) {
+        if (orders) return orders.collect { List<String> o -> h.orderPath(o[0]) + (o[1] == 'desc' ? ' desc' : ' asc') }.join(', ')
+        Object configured = api.domain.mapping.settings.get('sort')
+        if (configured instanceof Map && configured) {
+            Map.Entry e = ((Map) configured).entrySet().first()
+            return h.orderPath(e.key.toString()) + (e.value?.toString() == 'desc' ? ' desc' : ' asc')
+        }
+        configured ? h.orderPath(configured.toString()) + ' asc' : null
+    }
+
+    @groovy.transform.CompileStatic
+    private static void bind(org.hibernate.query.SelectionQuery q, HqlQuery h) {
+        for (Map.Entry<String, Object> p : h.params.entrySet()) {
+            if (p.value instanceof Collection) q.setParameterList(p.key, (Collection) p.value)
+            else q.setParameter(p.key, p.value)
+        }
+    }
+
+    /** O nome da entidade no HQL (o do metamodelo, que segue o mapeamento). */
+    @groovy.transform.CompileStatic
+    private String entityName(Session s) {
+        s.metamodel.entity(api.type).name
     }
 
     /** {@code list(params)} do GORM: com {@code max} (sem projeções), um {@code PagedResultList} com o {@code totalCount}. */
@@ -71,14 +110,19 @@ class QueryRunner {
     long count() {
         Persistence.withSession { Session s ->
             api.guard(s)
-            CriteriaBuilder cb = s.criteriaBuilder
-            CriteriaQuery<Long> q = cb.createQuery(Long)
-            Root root = q.from(api.type)
-            def qc = new QueryContext(cb, root, api.domain)
-            q.select(distinct ? cb.countDistinct(root) : cb.count(root))
-            if (criteria) q.where(Where.and(criteria as Criterion[]).toPredicate(qc))
-            s.createQuery(q).singleResult
+            countHql(s)
         }
+    }
+
+    @groovy.transform.CompileStatic
+    private long countHql(Session s) {
+        HqlQuery h = new HqlQuery(api.domain)
+        String where = whereHql(h)
+        String hql = 'select ' + (distinct ? 'count(distinct ' + HqlQuery.ROOT + ')' : 'count(' + HqlQuery.ROOT + ')') + ' from ' +
+                entityName(s) + ' ' + HqlQuery.ROOT + h.joinClause + (where ? ' where ' + where : '')
+        def q = s.createSelectionQuery(hql, Long)
+        bind(q, h)
+        q.uniqueResult() ?: 0L
     }
 
     int deleteAll() {

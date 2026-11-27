@@ -63,9 +63,7 @@ class Where {
 
     static Criterion or(Criterion... cs) { new Junction(true, cs.toList()) }
 
-    static Criterion not(Criterion c) {
-        return { QueryContext qc -> qc.cb.not(c.toPredicate(qc)) } as Criterion
-    }
+    static Criterion not(Criterion c) { new Not(c) }
 
     /** Propriedade booleana sozinha: {@code where { concluida }}. */
     static Criterion isTrue(String p) { eq(p, true) }
@@ -83,6 +81,39 @@ class Where {
         Predicate toPredicate(QueryContext qc) {
             Predicate[] ps = criteria.collect { it.toPredicate(qc) } as Predicate[]
             or ? qc.cb.or(ps) : qc.cb.and(ps)
+        }
+
+        @Override
+        @groovy.transform.CompileStatic
+        String toHql(HqlQuery h) {
+            // como cb.and()/cb.or() vazios: verdadeiro e falso
+            if (criteria.isEmpty()) return or ? '1=0' : '1=1'
+            if (criteria.size() == 1) return criteria[0].toHql(h)
+            StringBuilder sb = new StringBuilder('(')
+            for (int i = 0; i < criteria.size(); i++) {
+                if (i > 0) sb.append(or ? ' or ' : ' and ')
+                sb.append(criteria[i].toHql(h))
+            }
+            sb.append(')').toString()
+        }
+    }
+
+    static class Not implements Criterion {
+        final Criterion criterion
+
+        Not(Criterion criterion) {
+            this.criterion = criterion
+        }
+
+        @Override
+        Predicate toPredicate(QueryContext qc) {
+            qc.cb.not(criterion.toPredicate(qc))
+        }
+
+        @Override
+        @groovy.transform.CompileStatic
+        String toHql(HqlQuery h) {
+            'not (' + criterion.toHql(h) + ')'
         }
     }
 
@@ -125,6 +156,32 @@ class Where {
         }
 
         @Override
+        @groovy.transform.CompileStatic
+        String toHql(HqlQuery h) {
+            String p = h.path(path)
+            return switch (op) {
+                case 'eq' -> p + ' = ' + h.param(path, value)
+                case 'ne' -> p + ' <> ' + h.param(path, value)
+                case 'gt' -> p + ' > ' + h.param(path, value)
+                case 'ge' -> p + ' >= ' + h.param(path, value)
+                case 'lt' -> p + ' < ' + h.param(path, value)
+                case 'le' -> p + ' <= ' + h.param(path, value)
+                case 'like' -> p + ' like ' + h.param(value.toString())
+                case 'ilike' -> 'lower(' + p + ') like ' + h.param(value.toString().toLowerCase())
+                case 'in' -> {
+                    Object v = h.qc.convert(path, value)
+                    yield (v instanceof Collection && !((Collection) v).isEmpty()) ? p + ' in (' + h.param(v) + ')' : '1=0'
+                }
+                case 'between' -> p + ' between ' + h.param(path, value) + ' and ' + h.param(path, value2)
+                case 'isNull' -> p + ' is null'
+                case 'isNotNull' -> p + ' is not null'
+                case 'isEmpty' -> p + ' is empty'
+                case 'isNotEmpty' -> p + ' is not empty'
+                default -> throw new IllegalArgumentException("operador desconhecido: ${op}")
+            }
+        }
+
+        @Override
         String toString() {
             "${path} ${op} ${value}${value2 != null ? " ${value2}" : ''}"
         }
@@ -154,6 +211,16 @@ class Where {
                 case 'le' -> qc.cb.lessThanOrEqualTo(a, b)
                 default -> throw new IllegalArgumentException(op)
             }
+        }
+
+        static final Map<String, String> HQL_OPS = [eq: '=', ne: '<>', gt: '>', ge: '>=', lt: '<', le: '<=']
+
+        @Override
+        @groovy.transform.CompileStatic
+        String toHql(HqlQuery h) {
+            String o = HQL_OPS[op]
+            if (o == null) throw new IllegalArgumentException(op)
+            h.path(left) + ' ' + o + ' ' + h.path(right)
         }
     }
 }

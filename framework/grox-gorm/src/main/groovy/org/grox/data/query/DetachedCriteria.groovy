@@ -54,6 +54,11 @@ class DetachedCriteria<T> implements Iterable<T> {
         jakarta.persistence.criteria.Predicate toPredicate(QueryContext qc) {
             Where.and(criteria as Criterion[]).toPredicate(qc)
         }
+
+        @Override
+        String toHql(HqlQuery h) {
+            Where.and(criteria as Criterion[]).toHql(h)
+        }
     }
 
     DetachedCriteria<T> max(int max) { copy(max: max) }

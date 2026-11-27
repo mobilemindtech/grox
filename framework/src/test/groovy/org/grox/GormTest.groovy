@@ -435,6 +435,26 @@ class GormTest {
     }
 
     @Test
+    void 'where vira HQL e a mesma forma de consulta reaproveita o plano do Hibernate'() {
+        def ana = new Autor(nome: 'Ana', idade: 30).save(failOnError: true, flush: true)
+        new Livro(titulo: 'Groovy', autor: ana, preco: 50.0G).save(failOnError: true, flush: true)
+        new Livro(titulo: 'Gradle', autor: ana, preco: 20.0G).save(failOnError: true, flush: true)
+        def stats = datastore.sessionFactory.statistics
+        stats.clear()
+        Closure<List<String>> consulta = { String nome, BigDecimal minimo ->
+            Livro.where { autor.nome == nome && preco > minimo }.list(sort: 'titulo')*.titulo
+        }
+        assert consulta('Ana', 10.0G) == ['Gradle', 'Groovy']
+        long hits = stats.queryPlanCacheHitCount
+        assert consulta('Ana', 30.0G) == ['Groovy'] && consulta('Bia', 0.0G) == []
+        // antes (JPA Criteria): a tradução era refeita a cada consulta
+        assert stats.queryPlanCacheHitCount >= hits + 2
+        assert stats.queries.any { it.contains('join e.autor j1') && it.contains('j1.nome = :p1') && it.contains('order by e.titulo asc') }
+        assert Livro.where { autor.nome == 'Ana' }.count() == 2
+        assert Livro.where { titulo in [] }.list() == [] && Livro.where { !(titulo in ['Gradle']) }.list()*.titulo == ['Groovy']
+    }
+
+    @Test
     void 'getAll numa consulta so, na ordem dos ids, e exists sem carregar a entidade'() {
         def ids = ['Aa', 'Bb', 'Cc'].collect { new Autor(nome: it).save(failOnError: true, flush: true).id }
         def stats = datastore.sessionFactory.statistics

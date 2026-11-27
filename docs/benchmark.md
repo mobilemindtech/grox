@@ -132,6 +132,20 @@ No perfil da `/usuario/index` (1 conexão), 4,5% das amostras estavam em `IndyIn
 - Medido pela fatia no JFR, e não pela vazão: nesta máquina (área de trabalho, redução de frequência da CPU), a vazão variou mais que o efeito entre rodadas iguais.
 - Falta o construtor das domains (`Grupo.<init>`, 1,2%): as chamadas `$init$` dos traits `GormEntity` e `ValidationSupport` ficam no construtor da domain, que é dinâmico (código da app). A AST poderia compilar estaticamente o construtor sem argumentos que ela gera.
 
+## HQL gerado no lugar da JPA Criteria (2026-11-26)
+
+`where`/`DetachedCriteria`/`createCriteria` passaram a gerar HQL a partir da árvore de critérios (`HqlQuery`): joins com alias, valores como parâmetros nomeados. A mesma forma de consulta gera a mesma string, e o Hibernate a encontra no cache de planos; com a JPA Criteria, a consulta era montada e analisada a cada vez.
+
+| Perfil da `/usuario/index` (1 conexão), % das amostras da página | Criteria | HQL |
+|---|---:|---:|
+| Banco (total) | 17,6 | 15,3 |
+| Montagem da consulta (`SqmCriteriaNodeBuilder`, árvore SQM) | 1,5 | 0,2 |
+| Tradução para SQL (`buildInterpretation`) | 4,4 | 4,2 |
+| Hidratação | 5,2 | 5,8 |
+
+- **A tradução para SQL continua** no sample-app: ele é multi-tenant, e o `@TenantId` do Hibernate é um filtro de sessão (`_tenantId`) sempre habilitado. O Hibernate 7.4 (`SqmInterpretationsKey.isCacheable`) não guarda o plano de consultas com filtro habilitado; só a análise do HQL vem do cache. Em apps sem multi-tenancy (e sem `hibernate-filter` ligado), o plano inteiro é reaproveitado (teste: `queryPlanCacheHitCount`).
+- Projeções, `deleteAll`/`updateAll`, o `list(params)` da domain e os dynamic finders continuam com a Criteria.
+
 ## Memória: Grails x Grox (2026-10-31)
 
 A mesma app de livros da seção anterior, com o heap fixo (`-Xmx`), NMT ligado e 15 s de carga com 64 conexões na `/livros` (GSP) e depois na `/api/livros/7` (JSON). "Heap vivo" é o usado logo depois de um GC completo (`jcmd GC.run`). A máquina estava ocupada (load de 4 a 10), então os req/s não valem aqui.
