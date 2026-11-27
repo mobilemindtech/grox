@@ -12,6 +12,7 @@ Grox é um protótipo de framework web leve sobre os **atores do Groovy 6**. Ele
 | [desenvolvimento.md](desenvolvimento.md) | Como evoluir o framework: build, testes, receitas, armadilhas do Groovy 6 |
 | [roadmap.md](roadmap.md) | Fases, próximos passos e pendências conhecidas |
 | [benchmark.md](benchmark.md) | Como medir, resultados e o que o profiling mostrou |
+| [benchmark-historico.md](benchmark-historico.md) | Rodadas completas em A/B ao longo do tempo, para pegar regressões |
 
 O arquivo [`../Readme.md`](../Readme.md) guarda a ideia original do projeto.
 

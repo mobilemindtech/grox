@@ -16,7 +16,7 @@ Este livro é a documentação de quem usa o Grox. Ele só tem valor se acompanh
 | Problema encontrado num candidato à migração | `migracao/armadilhas.md` e, se ajudar, `migracao/casos-reais.md` | |
 | Recurso removido ou renomeado | Todos os capítulos que o citam (procure com `grep -rn` em `docs/livro/src`) | Idem |
 
-Mudanças internas que não alteram nada para quem usa (refatoração, desempenho sem mudança de API, testes) não precisam do livro, só dos documentos internos quando couber (`docs/arquitetura.md`, `docs/benchmark.md`).
+Mudanças internas que não alteram nada para quem usa (refatoração, desempenho sem mudança de API, testes) não precisam do livro, só dos documentos internos quando couber (`docs/arquitetura.md`, `docs/benchmark.md`). Uma rodada nova do histórico (`docs/benchmark-historico.md`) que mude as razões Grox x Grails atualiza a tabela de [Desempenho](../recomendacoes/desempenho.md).
 
 ## Convenções
 

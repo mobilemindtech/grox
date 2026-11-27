@@ -121,7 +121,7 @@ Mapeie o MIME em `Formats.MIME_TO_FORMAT` e `FORMAT_TO_MIME`, e trate o formato 
 
 ## Desempenho
 
-- **Meça antes de otimizar:** use JFR (receita em [benchmark.md](benchmark.md)) e o `bench/run.sh`.
+- **Meça antes de otimizar:** use JFR (receita em [benchmark.md](benchmark.md)) e o `bench/run.sh`. Para pegar regressões, a rodada completa em A/B (`bench/rodada.sh`) vai para o [histórico](benchmark-historico.md).
 - **Exceções no caminho de cada requisição** são o primeiro suspeito. `jfr summary` mostra `jdk.JavaExceptionThrow`, e o esperado é algo perto de zero, fora o `ResourceLeakDetector` do Netty.
 - **`@CompileStatic`:** use em classes do framework sem dinamismo (utilitários, roteamento, registro de tags). Não use em traits injetados nem onde se usa `methodMissing`/`propertyMissing`.
 - **Não crie estruturas por requisição que podem ser cacheadas por classe ou por expressão:** metaClass.properties, loggers, parsing.

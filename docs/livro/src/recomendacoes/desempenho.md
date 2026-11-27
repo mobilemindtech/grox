@@ -8,14 +8,15 @@ A mesma aplicação (o mesmo `grails-app/`) medida no Grails 8.0.0, no Grox com 
 
 | | Grails 8 | Grox compat | Grox puro |
 |---|---:|---:|---:|
-| Texto, 64 conexões | 1× | ~2× | ~2,8× |
-| Página GSP com layout, 64 conexões | 1× | ~1,4× | ~2× |
-| JSON, 64 conexões | 1× | ~1,2× | ~1,3× |
-| Página GSP, latência com 1 conexão | 1,4 a 2,2 ms | 0,9 a 1,1 ms | 0,8 ms |
-| Texto, latência com 1 conexão | 0,21 ms | 0,36 ms | 0,3 ms |
-| Subida | 18 a 23 s | 8 s | 7 a 8 s |
+| Texto, 64 conexões | 1× | ~3,4× | ~3,2× |
+| Página GSP com layout, 64 conexões | 1× | ~2,7× a 4,6× | ~2,6× a 4,3× |
+| JSON, 64 conexões | 1× | ~1,3× | ~1,4× |
+| Página GSP, latência com 1 conexão | 1,5 a 2,1 ms | 0,7 ms | 0,7 ms |
+| Texto, latência com 1 conexão | 0,21 ms | 0,31 ms | 0,3 ms |
+| JSON, latência com 1 conexão | 0,38 ms | 0,45 a 0,48 ms | 0,36 ms |
+| Subida | 17 a 19 s | 8 a 9 s | 8 a 8,5 s |
 
-O ganho maior está nas páginas GSP e sob carga. Numa requisição isolada e trivial (texto, JSON), o Grails ainda responde um pouco mais rápido, porque cada requisição no Grox troca de thread pelo menos duas vezes. A página de login do piloto app A, medida no mesmo MySQL e Redis, deu de 2× a 2,4× com 64 conexões. Método, números completos e o que ainda está em aberto: `docs/benchmark.md` no repositório.
+Medido em 2026-11-27, com o JDK 27. O ganho maior está nas páginas GSP e sob carga. Numa requisição isolada e trivial (texto, JSON), o Grails ainda responde um pouco mais rápido, porque cada requisição no Grox troca de thread pelo menos duas vezes. A página de login do piloto app A, medida no mesmo MySQL e Redis, deu de 2× a 2,4× com 64 conexões. Método, números completos e o que ainda está em aberto: `docs/benchmark.md` no repositório; cada rodada, com a comparação contra a versão anterior, fica em `docs/benchmark-historico.md`.
 
 ## Concorrência dos controllers
 
@@ -48,7 +49,7 @@ O ator fica livre na hora. Cada tarefa tem a própria sessão de dados: carregue
 
 ### `grox-dsl` para rotas quentes
 
-Na mesma aplicação, uma rota do `grox-dsl` atendeu de 1,05× a 2× mais que a action equivalente do controller, conforme a rota, porque pula interceptors, binding dos argumentos e negociação de formato. Para endpoints de altíssimo volume (health de negócio, APIs simples), considere uma rota da DSL. Virtual thread e ator empatam em texto e JSON; em páginas GSP, um pool de atores limita a concorrência de renderização e rendeu cerca de 15% mais.
+Uma rota do `grox-dsl` pula interceptors, binding dos argumentos e negociação de formato. Desde que o caminho dos controllers passou a ser compilado estaticamente, a diferença diminuiu: na medição de 2026-11-27, texto e GSP empataram com a action equivalente, e no JSON a rota da DSL respondeu em 0,36 ms contra 0,45 a 0,48 ms. Para endpoints de altíssimo volume que devolvem JSON (health de negócio, APIs simples), considere uma rota da DSL. Virtual thread e ator empatam em texto e JSON; em páginas GSP, um pool de atores limita a concorrência de renderização e rendeu cerca de 15% mais.
 
 ## Formulários em páginas públicas
 

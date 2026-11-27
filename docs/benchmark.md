@@ -9,6 +9,7 @@ bench/run.sh "-Dgrox.controllers.poolSize=64" /api/usuarios/1          # compara
 bench/build/install/bench/bin/bench http://host:8080/x 128 30 5 "Authorization: Bearer ..."   # direto
 ```
 
+- **Rodada completa e histórico:** `BASE=<checkout compilado> bench/rodada.sh` mede tudo abaixo em A/B (HEAD x base) e `bench/resumo.py` gera as tabelas; os resultados de cada rodada ficam em [benchmark-historico.md](benchmark-historico.md), para pegar regressões.
 - **Grails x Grox:** `bench/run-livros.sh grails|grox|plain` sobe a app de referência numa das três versões e mede texto, GSP e JSON com 64 e com 1 conexão (ver [abaixo](#grails-x-grox-compat-x-grox-puro-2026-10-10)).
 - **O que o `run.sh` faz:** sobe o `sample-app` empacotado (views pré-compiladas, `grox.gsp.reload=false`, ambiente development com os dados do BootStrap), obtém um JWT de admin para as rotas `/api/**` e roda o `LoadGen` em cada URL.
 - **Páginas com login:** `bench/run-logado.sh rotulo /usuario/index` faz login por formulário e mede com o cookie da sessão (o Basic faria bcrypt a cada requisição); mostra também o tempo de CPU do processo por requisição. Com `DIST=<installDist de outra versão>`, mede uma versão anterior para comparar em A/B.
@@ -311,7 +312,7 @@ jfr print --events jdk.ExecutionSample --stack-depth 200 /tmp/p.jfr
 
 ## Próximos alvos (pendentes, ver [roadmap](roadmap.md#pendente-próximos-passos-fase-7))
 
-Perfil da `/usuario/index` do sample-app com 1 conexão (JFR, só a janela de medição): ~13 ms de CPU por página, contra ~1,7 ms da página de login do piloto. Por fase, em ms por requisição:
+Perfil da `/usuario/index` do sample-app com 1 conexão (JFR, só a janela de medição), **de antes da série de 2026-11-26 e 27**: ~13 ms de CPU por página, contra ~1,7 ms da página de login do piloto. Na rodada de 2026-11-27 ([histórico](benchmark-historico.md#2026-11-27-ab23e32-x-c7ccb7d)), o p50 da página caiu de 10,9 para 6,3 ms e a CPU por requisição com 64 conexões, de 3,6 para 1,95 ms. A divisão por fase abaixo é a antiga; refaça o perfil antes de escolher o próximo alvo. Por fase, em ms por requisição:
 
 | Fase | ms | Melhoria prevista |
 |---|---:|---|
@@ -324,9 +325,8 @@ Perfil da `/usuario/index` do sample-app com 1 conexão (JFR, só a janela de me
 | SiteMesh | 0,8 | Preprocess na compilação da GSP |
 | Segurança e sessão | 0,7 | |
 
-- Tags nativas em `@CompileStatic` (maior fatia).
-- `@CompileStatic` em `NettyHttpHandler`, `WebDispatcher`, `ControllerSupport` e `SecurityFilter`, com lambdas nativas no lugar das closures passadas ao `CompletableFuture`.
-- Consultas: HQL em cache para `DetachedCriteria`/`where`/finders.
+- Feitos (2026-11-26 e 27): tags nativas em `@CompileStatic`, o caminho dos controllers em `@CompileStatic` e HQL em cache para `where`/`DetachedCriteria`/finders/`list`.
 - Rotas: indexar os mapeamentos por primeiro segmento literal (hoje o match e o reverse são lineares).
+- Liberar a conexão JDBC entre as transações durante a renderização da view.
 - Conexão JDBC presa durante a renderização da view (open session in view): liberar após cada transação.
 - Rodar numa máquina dedicada, com o gerador em outra máquina, e escolher o `poolSize` padrão com dados.

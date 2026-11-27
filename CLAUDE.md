@@ -29,7 +29,7 @@ Protótipo **Grox**: framework web leve sobre os atores do Groovy 6 (`groovy.con
 - Comentários e mensagens em português
 
 ## Desempenho
-Medir com JFR e `bench/run.sh` antes de otimizar; nada de exceções por requisição; `@CompileStatic` só em classes do framework sem dinamismo.
+Medir com JFR e `bench/run.sh` antes de otimizar; nada de exceções por requisição; `@CompileStatic` só em classes do framework sem dinamismo. Ao fechar uma série de otimizações, ou depois de mexer no caminho de toda requisição ou de atualizar Groovy/Netty/Hibernate/JDK, rode `BASE=<checkout da última rodada> bench/rodada.sh` (A/B) e registre o resultado em `docs/benchmark-historico.md`: é o que pega regressão.
 
 ## Armadilhas do Groovy 6
 Ver a tabela em `docs/desenvolvimento.md`. Os casos mais comuns: `call()` dentro de closure, conflito `isX`/`getX`, `{}` solto vira closure, aspas simples dentro de `'...'`, `switch` sobre `Class` e `?:` com valor 0.
