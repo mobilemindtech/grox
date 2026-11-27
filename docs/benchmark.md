@@ -144,7 +144,7 @@ No perfil da `/usuario/index` (1 conexão), 4,5% das amostras estavam em `IndyIn
 | Hidratação | 5,2 | 5,8 |
 
 - **A tradução para SQL continua** no sample-app: ele é multi-tenant, e o `@TenantId` do Hibernate é um filtro de sessão (`_tenantId`) sempre habilitado. O Hibernate 7.4 (`SqmInterpretationsKey.isCacheable`) não guarda o plano de consultas com filtro habilitado; só a análise do HQL vem do cache. Em apps sem multi-tenancy (e sem `hibernate-filter` ligado), o plano inteiro é reaproveitado (teste: `queryPlanCacheHitCount`).
-- Projeções, `deleteAll`/`updateAll`, o `list(params)` da domain e os dynamic finders continuam com a Criteria.
+- Em 2026-11-27, o `list(params)`/`count`/`exists`/`getAll` da domain, os dynamic finders e `findWhere`/`findAllWhere` passaram pelo mesmo HQL (o mesmo ganho por consulta; a `/usuario/index` já usava `where`). Projeções e `deleteAll`/`updateAll` continuam com a Criteria.
 
 ## Memória: Grails x Grox (2026-10-31)
 

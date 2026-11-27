@@ -1,6 +1,6 @@
 # Consultas
 
-Este capítulo mostra todas as formas de ler dados: os métodos estáticos, os dynamic finders, `findWhere`, HQL, as consultas `where { }`, `DetachedCriteria` e `createCriteria`. Todas passam pelo mesmo motor (Criteria API do JPA), então joins, conversão de tipos, paginação e o filtro de tenant valem igual em todas.
+Este capítulo mostra todas as formas de ler dados: os métodos estáticos, os dynamic finders, `findWhere`, HQL, as consultas `where { }`, `DetachedCriteria` e `createCriteria`. Todas passam pelo mesmo motor, que gera HQL com parâmetros nomeados (a mesma forma de consulta gera o mesmo HQL, e o Hibernate reaproveita o plano), então joins, conversão de tipos, paginação e o filtro de tenant valem igual em todas.
 
 ## Métodos estáticos
 

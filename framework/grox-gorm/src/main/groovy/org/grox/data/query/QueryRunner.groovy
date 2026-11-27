@@ -58,7 +58,7 @@ class QueryRunner {
         String hql = 'select ' + (distinct ? 'distinct ' : '') + HqlQuery.ROOT + ' from ' + entityName(s) + ' ' + HqlQuery.ROOT +
                 h.joinClause + (where ? ' where ' + where : '') + (order ? ' order by ' + order : '')
         def q = s.createSelectionQuery(hql, api.type)
-        bind(q, h)
+        h.bind(q)
         if (offset != null && offset > 0) q.firstResult = offset    // negativo: 0, como no GORM
         if (max) q.maxResults = max
         q.resultList
@@ -82,17 +82,8 @@ class QueryRunner {
     }
 
     @groovy.transform.CompileStatic
-    private static void bind(org.hibernate.query.SelectionQuery q, HqlQuery h) {
-        for (Map.Entry<String, Object> p : h.params.entrySet()) {
-            if (p.value instanceof Collection) q.setParameterList(p.key, (Collection) p.value)
-            else q.setParameter(p.key, p.value)
-        }
-    }
-
-    /** O nome da entidade no HQL (o do metamodelo, que segue o mapeamento). */
-    @groovy.transform.CompileStatic
     private String entityName(Session s) {
-        s.metamodel.entity(api.type).name
+        HqlQuery.entityName(s, api.type)
     }
 
     /** {@code list(params)} do GORM: com {@code max} (sem projeções), um {@code PagedResultList} com o {@code totalCount}. */
@@ -121,7 +112,7 @@ class QueryRunner {
         String hql = 'select ' + (distinct ? 'count(distinct ' + HqlQuery.ROOT + ')' : 'count(' + HqlQuery.ROOT + ')') + ' from ' +
                 entityName(s) + ' ' + HqlQuery.ROOT + h.joinClause + (where ? ' where ' + where : '')
         def q = s.createSelectionQuery(hql, Long)
-        bind(q, h)
+        h.bind(q)
         q.uniqueResult() ?: 0L
     }
 

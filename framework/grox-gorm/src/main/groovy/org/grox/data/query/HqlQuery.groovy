@@ -77,4 +77,17 @@ class HqlQuery {
     String getJoinClause() {
         joinClause.toString()
     }
+
+    /** Liga os parâmetros nomeados (coleções com {@code setParameterList}, para {@code in (:p1)}). */
+    void bind(org.hibernate.query.SelectionQuery q) {
+        for (Map.Entry<String, Object> p : params.entrySet()) {
+            if (p.value instanceof Collection) q.setParameterList(p.key, (Collection) p.value)
+            else q.setParameter(p.key, p.value)
+        }
+    }
+
+    /** O nome da entidade no HQL (o do metamodelo, que segue o mapeamento). */
+    static String entityName(org.hibernate.Session s, Class type) {
+        s.metamodel.entity(type).name
+    }
 }

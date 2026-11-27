@@ -1,10 +1,8 @@
 package org.grox.data
 
-import jakarta.persistence.criteria.CriteriaBuilder
-import jakarta.persistence.criteria.CriteriaQuery
-import jakarta.persistence.criteria.Order
-import jakarta.persistence.criteria.Predicate
-import jakarta.persistence.criteria.Root
+import org.grox.data.query.Criterion
+import org.grox.data.query.HqlQuery
+import org.grox.data.query.Where
 import org.grox.data.tenant.TenantSupport
 import org.grox.data.binding.DataBinder
 import org.hibernate.Session
@@ -50,15 +48,7 @@ class GormStaticApi {
     boolean exists(Object id) {
         if (domain.composite) return get(id) != null
         Object key = convertId(id)
-        if (key == null) return false
-        Persistence.withSession { Session s ->
-            guard(s)
-            def cb = s.criteriaBuilder
-            def q = cb.createQuery(Long)
-            def root = q.from(type)
-            q.select(cb.count(root)).where(cb.equal(root.get(domain.identity.name), key))
-            s.createQuery(q).singleResult > 0
-        }
+        key != null && ((Long) query([:], true, false, Where.eq(domain.identity.name, key))) > 0
     }
 
     /** Uma consulta ({@code id in (...)}) na ordem dos ids, com {@code null} para os inexistentes, como no GORM. */
@@ -68,16 +58,7 @@ class GormStaticApi {
         List keys = ids.collect { convertId(it) }
         List distinct = keys.findAll { it != null }.unique()
         Map<Object, Object> byId = [:]
-        if (distinct) {
-            Persistence.withSession { Session s ->
-                guard(s)
-                def cb = s.criteriaBuilder
-                def q = cb.createQuery(type)
-                def root = q.from(type)
-                q.select(root).where(root.get(domain.identity.name).in(distinct))
-                s.createQuery(q).resultList.each { byId[domain.identity.get(it)] = it }
-            }
-        }
+        if (distinct) ((List) query([:], false, false, Where.restriction('in', domain.identity.name, distinct))).each { byId[domain.identity.get(it)] = it }
         keys.collect { it == null ? null : byId[it] }
     }
 
@@ -122,52 +103,49 @@ class GormStaticApi {
         query([:], false, true, where(criteria))
     }
 
-    private Closure where(Map criteria) {
-        return { CriteriaBuilder cb, Root root ->
-            cb.and(criteria.collect { k, v ->
-                Object value = DynamicFinder.convert(domain, k.toString(), v)
-                value == null ? cb.isNull(root.get(k.toString())) : cb.equal(root.get(k.toString()), value)
-            } as Predicate[])
-        }
+    private static Criterion where(Map criteria) {
+        Where.and(criteria.collect { k, v -> Where.eq(k.toString(), v) } as Criterion[])
     }
 
     /**
-     * Consulta via Criteria: {@code params} com max, offset, sort, order; {@code restriction}
-     * devolve o Predicate a partir de (CriteriaBuilder, Root).
+     * Consulta em HQL gerado ({@link HqlQuery}): {@code params} com max, offset, sort, order; {@code restriction}
+     * opcional. A mesma forma de consulta gera a mesma string, e o Hibernate reaproveita o plano.
      */
-    Object query(Map params, boolean count, boolean unique, Closure restriction) {
+    @groovy.transform.CompileStatic
+    Object query(Map params, boolean count, boolean unique, Criterion restriction) {
         Persistence.withSession { Session s ->
             guard(s)
-            CriteriaBuilder cb = s.criteriaBuilder
+            HqlQuery h = new HqlQuery(domain)
+            String where = restriction?.toHql(h)
+            String root = HqlQuery.entityName(s, type) + ' ' + HqlQuery.ROOT
             if (count) {
-                CriteriaQuery<Long> q = cb.createQuery(Long)
-                Root root = q.from(type)
-                q.select(cb.count(root))
-                if (restriction) q.where((Predicate) restriction.call(cb, root))
-                return s.createQuery(q).singleResult
+                def q = s.createSelectionQuery('select count(' + HqlQuery.ROOT + ') from ' + root + h.joinClause + (where ? ' where ' + where : ''), Long)
+                h.bind(q)
+                return (Object) (q.uniqueResult() ?: 0L)
             }
-            CriteriaQuery q = cb.createQuery(type)
-            Root root = q.from(type)
-            q.select(root)
-            if (restriction) q.where((Predicate) restriction.call(cb, root))
-            List<Order> orders = ordering(cb, root, params)
-            if (orders) q.orderBy(orders)
-            def query = s.createQuery(q)
+            String order = ordering(h, params)
+            def q = s.createSelectionQuery('select ' + HqlQuery.ROOT + ' from ' + root + h.joinClause + (where ? ' where ' + where : '') +
+                    (order ? ' order by ' + order : ''), type)
+            h.bind(q)
             // offset negativo (links de paginação): 0, como o Hibernate 5 tolerava
-            if (params?.offset) query.firstResult = Math.max(0, params.offset as int)
-            if (unique) query.maxResults = 1
-            else if (params?.max) query.maxResults = params.max as int
-            List result = query.resultList
-            unique ? (result ? result[0] : null) : result
+            Object offset = params?.get('offset')
+            if (offset) q.firstResult = Math.max(0, offset as int)
+            Object max = params?.get('max')
+            if (unique) q.maxResults = 1
+            else if (max) q.maxResults = max as int
+            List result = q.resultList
+            (Object) (unique ? (result ? result[0] : null) : result)
         }
     }
 
-    private List<Order> ordering(CriteriaBuilder cb, Root root, Map params) {
-        Object sort = params?.sort
-        String order = params?.order?.toString()
+    /** {@code sort}/{@code order} dos params (só propriedades da domain) ou o {@code sort} do mapping. */
+    @groovy.transform.CompileStatic
+    private String ordering(HqlQuery h, Map params) {
+        Object sort = params?.get('sort')
+        String order = params?.get('order')?.toString()
         if (sort && !domain.hasPersistentProperty(sort.toString())) sort = null
         if (!sort) {
-            Object configured = domain.mapping.settings.sort
+            Object configured = domain.mapping.settings.get('sort')
             if (configured instanceof Map && configured) {
                 Map.Entry e = ((Map) configured).entrySet().first()
                 sort = e.key
@@ -176,10 +154,10 @@ class GormStaticApi {
                 sort = configured
             }
         }
-        if (!sort) return []
+        if (!sort) return null
         String prop = sort.toString()
-        if (!domain.hasPersistentProperty(prop)) return []
-        [order?.toLowerCase() == 'desc' ? cb.desc(root.get(prop)) : cb.asc(root.get(prop))]
+        if (!domain.hasPersistentProperty(prop)) return null
+        h.orderPath(prop) + (order?.toLowerCase() == 'desc' ? ' desc' : ' asc')
     }
 
     // --- HQL ---

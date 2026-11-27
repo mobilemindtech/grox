@@ -455,6 +455,26 @@ class GormTest {
     }
 
     @Test
+    void 'finders, list(params) e findAllWhere tambem em HQL com o plano reaproveitado'() {
+        def ana = new Autor(nome: 'Ana', idade: 30).save(failOnError: true, flush: true)
+        new Autor(nome: 'Bia', idade: 40).save(failOnError: true, flush: true)
+        new Livro(titulo: 'Groovy', autor: ana, preco: 50.0G).save(failOnError: true, flush: true)
+        def stats = datastore.sessionFactory.statistics
+        Closure rodar = {
+            [Autor.findAllByIdadeGreaterThan(20, [sort: 'nome', order: 'desc'])*.nome, Autor.findByNome('Ana')?.nome,
+             Autor.countByNomeIlikeOrIdade('b%', '30'), Autor.list(max: 1, offset: 1, sort: 'nome')*.nome,
+             Autor.findAllWhere(nome: 'Bia')*.idade, Livro.findAllByAutor(ana)*.titulo, Autor.findAllByNomeNotInList([])*.nome.sort()]
+        }
+        def esperado = [['Bia', 'Ana'], 'Ana', 2L, ['Bia'], [40], ['Groovy'], ['Ana', 'Bia']]
+        assert rodar() == esperado
+        stats.clear()
+        assert rodar() == esperado
+        // antes (JPA Criteria): nenhuma destas consultas reaproveitava o plano
+        assert stats.queryPlanCacheHitCount >= 7
+        assert stats.queries.any { it.contains('lower(e.nome) like :p1 or e.idade = :p2') }
+    }
+
+    @Test
     void 'getAll numa consulta so, na ordem dos ids, e exists sem carregar a entidade'() {
         def ids = ['Aa', 'Bb', 'Cc'].collect { new Autor(nome: it).save(failOnError: true, flush: true).id }
         def stats = datastore.sessionFactory.statistics

@@ -1,11 +1,7 @@
 package org.grox.data
 
-import jakarta.persistence.criteria.CriteriaBuilder
-import jakarta.persistence.criteria.Expression
-import jakarta.persistence.criteria.Path
-import jakarta.persistence.criteria.Predicate
-import jakarta.persistence.criteria.Root
-import org.grox.data.binding.DataBinder
+import org.grox.data.query.Criterion
+import org.grox.data.query.Where
 
 import java.util.concurrent.ConcurrentHashMap
 
@@ -108,54 +104,39 @@ class DynamicFinder {
         int needed = plan.arity
         if (args.length < needed) throw new IllegalArgumentException("${plan.prefix}: esperados ${needed} argumento(s), recebidos ${args.length}")
         Map pagination = args.length > needed && args[needed] instanceof Map ? (Map) args[needed] : [:]
-        api.query(pagination, plan.prefix == 'countBy', plan.prefix == 'findBy') { CriteriaBuilder cb, Root root ->
-            int i = 0
-            List<Predicate> predicates = plan.clauses.collect { Clause c ->
-                Object[] values = (0..<c.arity).collect { convert(api.domain, c.property, args[i++]) } as Object[]
-                predicate(cb, root, c, values)
-            }
-            Predicate combined = plan.or ? cb.or(predicates as Predicate[]) : cb.and(predicates as Predicate[])
-            if (plan.required == null) return combined
-            Predicate flag = predicate(cb, root, plan.required, new Object[0])
-            predicates ? cb.and(flag, combined) : flag
+        int i = 0
+        List<Criterion> criteria = plan.clauses.collect { Clause c ->
+            Object[] values = (0..<c.arity).collect { args[i++] } as Object[]
+            criterion(c, values)
         }
+        Criterion combined = plan.or ? Where.or(criteria as Criterion[]) : Where.and(criteria as Criterion[])
+        if (plan.required != null) combined = criteria ? Where.and(criterion(plan.required, new Object[0]), combined) : criterion(plan.required, new Object[0])
+        api.query(pagination, plan.prefix == 'countBy', plan.prefix == 'findBy', combined)
     }
 
-    static Object convert(DomainClass d, String prop, Object value) {
-        DomainProperty p = d[prop]
-        if (value instanceof Range) return value
-        if (value instanceof CharSequence && p.type != String && !p.association && DataBinder.isSimple(p.type)) {
-            return DataBinder.convert(value.toString(), p.type)
-        }
-        if (value instanceof Collection && !p.association && p.type != String && DataBinder.isSimple(p.type)) {
-            return ((Collection) value).collect { it instanceof CharSequence ? DataBinder.convert(it.toString(), p.type) : it }
-        }
-        value
-    }
-
-    static Predicate predicate(CriteriaBuilder cb, Root root, Clause c, Object[] v) {
-        Path path = root.get(c.property)
-        Expression<Comparable> cmp = (Expression<Comparable>) path
+    /** O critério de uma cláusula (os valores são convertidos para o tipo da propriedade no HQL). */
+    static Criterion criterion(Clause c, Object[] v) {
+        String p = c.property
         return switch (c.operator) {
-            case 'Equal' -> v[0] == null ? cb.isNull(path) : cb.equal(path, v[0])
-            case 'NotEqual' -> v[0] == null ? cb.isNotNull(path) : cb.notEqual(path, v[0])
-            case 'LessThan' -> cb.lessThan(cmp, (Comparable) v[0])
-            case 'LessThanEquals' -> cb.lessThanOrEqualTo(cmp, (Comparable) v[0])
-            case 'GreaterThan' -> cb.greaterThan(cmp, (Comparable) v[0])
-            case 'GreaterThanEquals' -> cb.greaterThanOrEqualTo(cmp, (Comparable) v[0])
-            case 'Like' -> cb.like((Expression<String>) path, v[0].toString())
-            case 'NotLike' -> cb.notLike((Expression<String>) path, v[0].toString())
-            case 'Ilike' -> cb.like(cb.lower((Expression<String>) path), v[0].toString().toLowerCase())
-            case 'InList' -> ((Collection) v[0]) ? path.in((Collection) v[0]) : cb.disjunction()
-            case 'NotInList' -> ((Collection) v[0]) ? cb.not(path.in((Collection) v[0])) : cb.conjunction()
-            case 'Between' -> cb.between(cmp, (Comparable) v[0], (Comparable) v[1])
-            case 'InRange' -> cb.between(cmp, (Comparable) ((Range) v[0]).from, (Comparable) ((Range) v[0]).to)
-            case 'IsTrue' -> cb.isTrue((Expression<Boolean>) path)
-            case 'IsFalse' -> cb.isFalse((Expression<Boolean>) path)
-            case 'IsNull' -> cb.isNull(path)
-            case 'IsNotNull' -> cb.isNotNull(path)
-            case 'IsEmpty' -> cb.isEmpty((Expression<Collection>) path)
-            case 'IsNotEmpty' -> cb.isNotEmpty((Expression<Collection>) path)
+            case 'Equal' -> Where.eq(p, v[0])
+            case 'NotEqual' -> Where.ne(p, v[0])
+            case 'LessThan' -> Where.lt(p, v[0])
+            case 'LessThanEquals' -> Where.le(p, v[0])
+            case 'GreaterThan' -> Where.gt(p, v[0])
+            case 'GreaterThanEquals' -> Where.ge(p, v[0])
+            case 'Like' -> Where.like(p, v[0].toString())
+            case 'NotLike' -> Where.not(Where.like(p, v[0].toString()))
+            case 'Ilike' -> Where.ilike(p, v[0].toString())
+            case 'InList' -> Where.restriction('in', p, v[0])
+            case 'NotInList' -> Where.not(Where.restriction('in', p, v[0]))
+            case 'Between' -> Where.between(p, v[0], v[1])
+            case 'InRange' -> Where.between(p, ((Range) v[0]).from, ((Range) v[0]).to)
+            case 'IsTrue' -> Where.eq(p, true)
+            case 'IsFalse' -> Where.eq(p, false)
+            case 'IsNull' -> Where.isNull(p)
+            case 'IsNotNull' -> Where.isNotNull(p)
+            case 'IsEmpty' -> Where.isEmpty(p)
+            case 'IsNotEmpty' -> Where.isNotEmpty(p)
             default -> throw new IllegalStateException(c.operator)
         }
     }
