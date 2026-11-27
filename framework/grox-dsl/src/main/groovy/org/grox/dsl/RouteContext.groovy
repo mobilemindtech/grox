@@ -201,14 +201,9 @@ class RouteContext implements ViewRequest {
 
     GroxSession getSession(boolean create) { requestSession.get(create) }
 
+    /** Sem sessão, um flash que só a cria na primeira escrita ({@link FlashScope#of}). */
     FlashScope getFlash() {
-        GroxSession s = getSession(true)
-        FlashScope f = (FlashScope) s.getAttribute(FlashScope.KEY)
-        if (f == null) {
-            f = new FlashScope()
-            s.setAttribute(FlashScope.KEY, f)
-        }
-        f
+        FlashScope.of(request, { Boolean create -> getSession(create) } as java.util.function.Function<Boolean, GroxSession>)
     }
 
     /** {@code ?lang=pt_BR} (guardado na sessão), sessão, Accept-Language ou o padrão das mensagens. */

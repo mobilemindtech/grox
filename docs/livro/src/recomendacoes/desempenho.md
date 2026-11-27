@@ -53,11 +53,9 @@ Uma rota do `grox-dsl` pula interceptors, binding dos argumentos e negociação 
 
 ## Formulários em páginas públicas
 
-Com o CSRF ativo (o padrão), o `<g:form>` grava o token na sessão. Numa página aberta a anônimos, **cada visitante sem cookie ganha uma sessão**, e robôs e monitores, que não devolvem o cookie, criam uma por requisição. Numa medição de 1 minuto com carga numa página assim, ficaram 57 mil sessões em memória; no Redis, cada requisição vira uma escrita. O Grails não tem CSRF no `<g:form>` e não cria sessão nesse caso.
+Com o CSRF ativo (o padrão), o `<g:form>` de uma página aberta a anônimos põe o token num cookie (`GROX-CSRF`), não na sessão: visitantes, robôs e monitores não criam sessão só por ver a página. Ler `flash.message` no layout também não cria. Até a versão de 2026-11-27, cada requisição anônima a uma página com formulário criava uma sessão (57 mil em 1 minuto de carga numa medição; no Redis, uma escrita por requisição).
 
-- Mantenha os formulários fora das páginas públicas de muito tráfego (a home, as páginas de produto) ou carregue-os depois, só quando o usuário for usar.
-- Com muito tráfego anônimo, prefira `grox.session.store: redis` (as sessões não pesam no heap) e um `grox.session.timeout` menor.
-- Não desligue o CSRF só por isso: ele protege os formulários dos usuários logados.
+O que ainda cria sessão para um anônimo: escrever no flash ou na sessão (`session.x = ...`), um login com falha (a mensagem vai no flash) e o acesso a uma página protegida (a URL fica guardada para depois do login). Com muito tráfego anônimo nessas rotas, prefira `grox.session.store: redis` e um `grox.session.timeout` menor.
 
 ## Banco de dados
 

@@ -312,21 +312,32 @@ jfr print --events jdk.ExecutionSample --stack-depth 200 /tmp/p.jfr
 
 ## Próximos alvos (pendentes, ver [roadmap](roadmap.md#pendente-próximos-passos-fase-7))
 
-Perfil da `/usuario/index` do sample-app com 1 conexão (JFR, só a janela de medição), **de antes da série de 2026-11-26 e 27**: ~13 ms de CPU por página, contra ~1,7 ms da página de login do piloto. Na rodada de 2026-11-27 ([histórico](benchmark-historico.md#2026-11-27-ab23e32-x-c7ccb7d)), o p50 da página caiu de 10,9 para 6,3 ms e a CPU por requisição com 64 conexões, de 3,6 para 1,95 ms. A divisão por fase abaixo é a antiga; refaça o perfil antes de escolher o próximo alvo. Por fase, em ms por requisição:
+**Perfil de 2026-11-27** (depois da série de otimizações e do CSRF sem sessão): `/usuario/index` do sample-app com login e 1 conexão, 30 s de aquecimento e 30 s de medição (`bench/run-logado.sh` com JFR `settings=profile` em 20 s da janela, 1.726 amostras). Resultado: 253 req/s, p50 de 3,9 ms e 7,0 ms de CPU do processo por requisição. O perfil anterior a 2026-11-26 tinha ~13 ms de CPU por página. Por fase, cada amostra conta para o frame categorizado mais profundo da pilha. Os invólucros que cobrem a requisição inteira (`Persistence.withSession`, `SecurityContextHolder`, o proxy dos services) não contam:
 
-| Fase | ms | Melhoria prevista |
+| Fase | Amostras | Com a folha no runtime do Groovy ou em `java.lang.invoke` |
+|---|---:|---:|
+| Banco (Hibernate, H2, `org.grox.data`) | 23,2% | 6,1% |
+| Action (controller, interceptors, `org.grox.web`) | 18,0% | 12,6% |
+| GSP sem tags | 16,6% | 10,7% |
+| Tags | 15,3% | 7,6% |
+| Netty e despacho | 10,8% | 4,2% |
+| SiteMesh | 7,6% | 1,9% |
+| Segurança e sessão | 6,8% | 5,2% |
+| Outros | 1,7% | 1,0% |
+
+**Metade do tempo (49%) é despacho dinâmico:** a folha da pilha está no runtime do Groovy (`ClassInfo.getWeakMetaClass`, `isSameMetaClass`, `MetaClassHelper.sameClasses`) ou nos guardas dos call sites indy (`LambdaForm$MH.guard`, `Invokers.checkCustomized`, `MethodHandleImpl.profileBoolean`). Quem chama, em % de todas as amostras:
+
+| Chamador | % | Observação |
 |---|---:|---|
-| Tags | 2,7 | Tags nativas em `@CompileStatic`: feito para `g:link`, `form`, `paginate`, `message`, `formatDate` e `sortableColumn` (cerca de 10% na página, ver acima) e, em 2026-11-27, para os campos de formulário, as tags de layout, a `AssetTagLib` e `sec:ifLoggedIn` (mais ≈10% do tempo das tags) |
-| Banco | 2,5 | HQL gerado e em cache para consultas repetidas (a interpretação SQM e a hidratação dominam; o H2 é 0,3 ms) |
-| Action | 2,1 | Proxy dos services, `DetachedCriteria`, `respond`: espalhado, nenhum item acima de 0,15 ms |
-| Virtual threads e despacho solto | 1,8 | Menos saltos de thread nas rotas simples |
-| Netty | 1,3 | `@CompileStatic` em `NettyHttpHandler` (`convert`, `enqueue`, `HeaderMap` com closures) |
-| GSP sem tags | 1,2 | |
-| SiteMesh | 0,8 | Preprocess na compilação da GSP |
-| Segurança e sessão | 0,7 | |
+| GSPs compiladas (`gsp_usuario_index`, `gsp_layouts_main` e closures) | ~5% | Código da app, dinâmico por natureza; ver a ideia do item 2 abaixo |
+| `GspTemplateEngine.render` e `GspViews.render` (closures) | ~2,8% | Framework |
+| Rotas: `UrlMappingsHolder.reverse`, `UrlMapping.reverse` e `LinkGenerator.link` | ~3% | Framework: o `g:link`/`paginate` de cada linha passa por aqui |
+| `UsuarioController.index` e `AuditoriaInterceptor` | ~2,3% | Código da app |
+| `MessageSource.format`, `HeaderMap`, `Metrics.RouteStats.record`, `InterceptorApi.doesMatch`/`getThrowable`, `AccessExpression.anyGranted`, `SecurityFilter.bypasses`, `TagLibRegistry.callTag`, `QueryRunner` | 0,4% a 0,7% cada | Framework: espalhado |
 
-- Feitos (2026-11-26 e 27): tags nativas em `@CompileStatic`, o caminho dos controllers em `@CompileStatic` e HQL em cache para `where`/`DetachedCriteria`/finders/`list`.
-- Rotas: indexar os mapeamentos por primeiro segmento literal (hoje o match e o reverse são lineares).
-- Liberar a conexão JDBC entre as transações durante a renderização da view.
-- Conexão JDBC presa durante a renderização da view (open session in view): liberar após cada transação.
-- Rodar numa máquina dedicada, com o gerador em outra máquina, e escolher o `poolSize` padrão com dados.
+Alvos, por ordem de ganho esperado:
+
+1. **Rotas em `@CompileStatic` e indexadas** (`UrlMappingsHolder`, `UrlMapping`, `LinkGenerator`): ~3% em despacho dinâmico mais a busca linear; o índice por primeiro segmento literal já estava no roadmap.
+2. **Call sites das GSPs compiladas:** ~5%, mais ~2,8% do motor. A expressão `${...}` da view é código da app e fica dinâmica. Os auxiliares que o compilador gera em volta dela (saída, escape, `invokeTag`) podem ser chamadas estáticas, como no `TraitInitTransformation`.
+3. **O restante do framework no caminho de toda requisição:** `MessageSource.format`, `HeaderMap`, `Metrics`, os auxiliares dos interceptors e do `SecurityFilter`, `TagLibRegistry.callTag` e `QueryRunner`. São 0,4% a 0,7% cada, ~5% somados.
+4. **Banco:** 23% das amostras com 4 consultas por página no H2 em memória. Com o filtro `_tenantId`, o Hibernate 7.4 não guarda a tradução para SQL (ver acima). Investigar se dá para manter o plano com o filtro, ou trocá-lo por uma restrição no próprio HQL gerado.

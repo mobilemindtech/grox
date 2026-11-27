@@ -145,7 +145,7 @@ Legenda: ✅ suportado · 🟡 parcial · ❌ ausente (ver [roadmap](roadmap.md)
 | `filterChain.chainMap` com `filters: 'none'` (sem segurança nem sessão) | ✅ | Assets sempre sem segurança, como no Grails |
 | `filterChain.chainMap` com listas de filtros (`JOINED_FILTERS,-x`), primeira entrada que casa | ✅ | Interpretados: sessão, token REST, Basic, anônimo, autorização e tradução de exceção (ver o guia). `rememberMe`, `logoutFilter` e `authenticationProcessingFilter` não mudam nada |
 | Limite de tentativas de login, cabeçalhos de segurança, `Secure` no cookie, allowlist na sessão do Redis | ✅ | Extensões Grox (o Grails não faz por padrão); ver `docs/guia.md` |
-| CSRF (token de sessão, `<g:form>` automático) | ✅ | Extensão Grox: o plugin do Grails não liga CSRF por padrão |
+| CSRF (token de sessão, `<g:form>` automático) | ✅ | Extensão Grox: o plugin do Grails não liga CSRF por padrão. Sem sessão, o token vai no cookie `GROX-CSRF` (*double submit*): páginas públicas com formulário não criam sessão, como no Grails |
 | Remember-me, switch user, OAuth2/OIDC, LDAP | ❌ | LDAP é possível via `UserDetailsService` próprio |
 
 ## Multi-tenancy (GORM)

@@ -325,6 +325,12 @@ class SampleAppTest {
         assert redirect.headers().firstValue('Location').get() == '/home/lerMensagem'
         assert call('GET', '/home/lerMensagem').body() == 'Olá do flash'
         assert call('GET', '/home/lerMensagem').body() == 'vazio'
+        // sem sessão, ler o flash não cria uma; escrever cria (e a mensagem chega à próxima requisição)
+        def anonimo = new TestClient(base)
+        def leitura = anonimo.page('/home/lerMensagem')
+        assert leitura.body() == 'vazio' && leitura.headers().allValues('Set-Cookie').isEmpty()
+        assert anonimo.page('/home/mensagem').headers().allValues('Set-Cookie').any { it.startsWith('GROXSESSIONID=') }
+        assert anonimo.page('/home/lerMensagem').body() == 'Olá do flash'
     }
 
     @Test

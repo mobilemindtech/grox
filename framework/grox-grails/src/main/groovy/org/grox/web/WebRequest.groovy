@@ -80,14 +80,9 @@ class WebRequest implements org.grox.view.ViewRequest {
         requestSession.get(create)
     }
 
+    /** Sem sessão, um flash que só a cria na primeira escrita ({@link FlashScope#of}). */
     FlashScope getFlash() {
-        GroxSession s = getSession(true)
-        FlashScope f = (FlashScope) s.getAttribute(FLASH_KEY)
-        if (f == null) {
-            f = new FlashScope()
-            s.setAttribute(FLASH_KEY, f)
-        }
-        f
+        FlashScope.of(request, { Boolean create -> getSession(create) } as java.util.function.Function<Boolean, GroxSession>)
     }
 
     String getFormat() {

@@ -39,13 +39,26 @@ grails.plugin.springsecurity.csrf.enabled: true   # padrão
 | GET, HEAD, OPTIONS | Não |
 | Bearer (JWT ou token GORM) | Não |
 | Caminho `stateless` | Não |
-| Anônima **sem** cookie de sessão, sem vir de outro site (POST público de API) | Não: não há estado do usuário a forjar |
+| Anônima com o cookie `GROX-CSRF` (já viu um formulário) | Exigido, conferido com o cookie |
+| Anônima **sem** cookie de sessão nem `GROX-CSRF`, sem vir de outro site (POST público de API) | Não: não há estado do usuário a forjar |
 | Anônima vinda de outro site pelo navegador (`Sec-Fetch-Site`/`Origin`) | Exigido, mesmo sem sessão: evita login CSRF (a action poderia criar a sessão e logar a vítima na conta do atacante) |
 | Login por formulário | Sempre exigido |
 | HTTP Basic de cliente de API | Não |
 | HTTP Basic vindo de um navegador em outro site (`Sec-Fetch-Site: cross-site`/`same-site`, ou `Origin` diferente do `Host`) | Exigido: o navegador reenvia sozinho credenciais Basic guardadas. Em caminho stateless, a requisição é recusada |
 
 O token é renovado no login, no `reauthenticate` e ao trocar o usuário pelo `SecurityContextHolder`.
+
+### Visitantes sem sessão
+
+Para quem ainda não tem sessão, o token não fica na sessão: vai num cookie `GROX-CSRF` (*double submit*: o valor do cookie e o do formulário precisam ser iguais), `HttpOnly`, `SameSite=Lax` e, em HTTPS, com o prefixo `__Host-`. Assim, um `<g:form>` numa página pública não cria uma sessão por visitante (robôs e monitores criavam uma por requisição). Depois do login, vale o token da sessão, e o do cookie não é mais aceito. A página de login e a leitura de `flash.message` também não criam sessão (o flash só a cria na primeira escrita).
+
+| Cookie | Valor |
+|---|---|
+| Nome | `GROX-CSRF` (em HTTPS, `__Host-GROX-CSRF`, que outro subdomínio não consegue gravar) |
+| Atributos | `Path=/; HttpOnly; SameSite=Lax`, mais `Secure` em HTTPS (`grox.session.cookie.secure`) |
+| Validade | Até fechar o navegador |
+
+Um POST de outro site não leva o cookie (`SameSite=Lax`), então o token sozinho não basta. Para o JavaScript da página, nada muda: leia o token de `${sec.csrfToken()}` (num `<meta>`, por exemplo), não do cookie.
 
 ### Migrando apps sem token
 

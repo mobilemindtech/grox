@@ -113,7 +113,8 @@ O CSRF fica ativo por padrão (`csrf.enabled: true`) *(extensão Grox)*. Ele val
 
 - O `<g:form>` já inclui o campo `_csrf`. Num `<form>` escrito à mão, inclua `<input type="hidden" name="_csrf" value="...">` (na página de login, o modelo traz `csrfParameter` e `csrfToken`).
 - Em AJAX, envie o cabeçalho `X-CSRF-TOKEN`.
-- Não vale para Bearer, Basic de clientes de API, caminhos `stateless` e POST anônimo sem cookie de sessão que não venha de outro site.
+- Não vale para Bearer, Basic de clientes de API, caminhos `stateless` e POST anônimo sem cookie de sessão (nem o `GROX-CSRF`) que não venha de outro site.
+- Sem sessão, o token vai no cookie `GROX-CSRF` em vez da sessão: formulários em páginas públicas não criam uma sessão por visitante.
 - POST sem token recebe `403`.
 
 Mais em [Segurança: CSRF e proteções](../recursos/seguranca-protecoes.md).

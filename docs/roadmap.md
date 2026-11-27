@@ -20,7 +20,7 @@
 
 Status: **não iniciado**. Ordem sugerida:
 
-- [ ] **Desempenho** (perfil da `/usuario/index` com 1 conexão, ~13 ms de CPU por página antes da série de 2026-11-26 e 27: ver [benchmark.md](benchmark.md#próximos-alvos-pendentes-ver-roadmap)). Medir cada passo em A/B
+- [ ] **Desempenho** (perfil da `/usuario/index` com 1 conexão: ~13 ms de CPU por página antes da série de 2026-11-26 e 27, 7 ms no perfil de 2026-11-27, metade em despacho dinâmico; ver [benchmark.md](benchmark.md#próximos-alvos-pendentes-ver-roadmap)). Medir cada passo em A/B
   - [x] Histórico de desempenho: `bench/rodada.sh` (rodada completa em A/B, HEAD x base) e `bench/resumo.py`, com os resultados em [benchmark-historico.md](benchmark-historico.md). Rodada de 2026-11-27 (`ab23e32` x `c7ccb7d`): `/usuario/index` de 91 para 157 req/s com 1 conexão e de 10,9 para 6,3 ms no p50; texto no compat +45% com 64 conexões
   - [x] Tags como métodos (`def tag(Map attrs, Closure body)`, como no Grails 3+), além de closures: base para tipar as tags nativas
   - [x] Tags nativas em `@CompileStatic` (`ApplicationTagLib`, `FormTagLib`, `RenderTagLib`, `AssetTagLib`): ~2,7 ms por página, a maior fatia. `g:link`, `form`, `paginate`, `message`, `formatDate` e `sortableColumn` (2026-11-26, cerca de 10% na `/usuario/index`); campos de formulário, tags de layout, `AssetTagLib` e `sec:ifLoggedIn` (2026-11-27, ≈10% do tempo das tags). Ver [benchmark.md](benchmark.md#tags-nativas-em-compilestatic-2026-11-26). As tags pouco usadas nas páginas medidas seguem em closure. A API das tags para as apps não muda
@@ -30,7 +30,10 @@ Status: **não iniciado**. Ordem sugerida:
   - [x] Helpers do `GspPage` em `@CompileStatic` (feito na revisão de 2026-09-30)
   - [x] Religação de call sites do Groovy (2026-11-26): `ServiceProxies`, `DomainEventBridge` e a execução do `DetachedCriteria` em `@CompileStatic`; de 4,5% para 1,2% da página (ver [benchmark.md](benchmark.md#religação-de-call-sites-do-groovy-2026-11-26))
   - [x] Construtor das domains: as chamadas `$init$` dos traits religavam (a domain e o proxy do Hibernate passam pelo mesmo call site); a `TraitInitTransformation` as torna chamadas diretas (2026-11-27): religação de 1,4% para 0,1% das amostras
-  - [ ] Índice de rotas por primeiro segmento literal (match e reverse hoje são lineares)
+  - [ ] Rotas: `UrlMappingsHolder`, `UrlMapping` e `LinkGenerator` em `@CompileStatic` (~3% da página em despacho dinâmico, perfil de 2026-11-27) e índice por primeiro segmento literal (match e reverse hoje são lineares)
+  - [ ] GSP compilada: chamadas estáticas para os auxiliares que o compilador gera em volta das expressões (saída, escape, `invokeTag`); GSPs e motor somam ~8% em despacho dinâmico
+  - [ ] Restante do caminho de toda requisição em `@CompileStatic`: `MessageSource.format`, `HeaderMap`, `Metrics.RouteStats`, auxiliares dos interceptors e do `SecurityFilter`, `TagLibRegistry.callTag`, `QueryRunner` (~5% somados)
+  - [ ] Banco com o filtro `_tenantId`: manter a tradução para SQL no cache (restrição no HQL gerado em vez do filtro?)
   - [ ] Liberar a conexão JDBC após cada transação durante a renderização da view
   - [ ] Benchmark em máquina dedicada (gerador em outra máquina) e escolha do `grox.controllers.poolSize` padrão
 - [x] **Dados**
@@ -65,7 +68,7 @@ A mesma app (`bench/livros`) no Grails 8.0.0, no Grox com o módulo Grails e no 
 
 - [x] App de referência: o mesmo `grails-app/` no Grails 8 (`bench/livros-grails`) e no Grox (`bench/livros`); `bench/run-livros.sh`
 - [x] Caminho quente em `@CompileStatic` e menos saltos de thread (texto do `sample-plain`: de ~0,39 para ~0,27 ms com 1 conexão)
-- [ ] **Sessão por visitante anônimo:** uma página com `<g:form>` grava o token CSRF na sessão, e cada requisição sem cookie cria uma sessão nova (57 mil em 1 minuto de carga na memória; no Redis, uma escrita por requisição). O Grails, sem CSRF, não cria nenhuma. Opções: token sem sessão para anônimos (cookie assinado, *double submit*), timeout curto para sessões que só têm o token, ou limite de sessões anônimas. Decisão de segurança: pendente
+- [x] **Sessão por visitante anônimo** (2026-11-27): uma página com `<g:form>` gravava o token CSRF na sessão, e cada requisição sem cookie criava uma sessão nova (57 mil em 1 minuto de carga na memória; no Redis, uma escrita por requisição). Agora, sem sessão, o token vai no cookie `GROX-CSRF` (*double submit*, `HttpOnly`, `SameSite=Lax`, `__Host-` em HTTPS); a sessão autenticada continua com o token próprio. A página de login e a leitura do flash também não criam mais sessão (o flash só a cria na primeira escrita)
 - [x] **Custo por requisição dos controllers:** `@CompileStatic` no `ControllerExecutor`, `WebRequest`, `ActionMethod.bindArguments`/`invoke`, `ActorPool.submit`, `Metrics.end`, `Management.handles`, `Conversions.isSimple` e nos auxiliares do `HttpPipeline` (`safePath` sem regex no caso comum). Texto com 1 conexão de 0,36 para 0,31 ms, JSON de ~0,53 para ~0,43 ms (Grails: 0,21 e 0,37). O salto para o ator do controller fica: é o modelo de concorrência (uma instância por ator)
 - [x] **Requisições simultâneas na mesma sessão:** não era disputa. O perfil com e sem cookie tem o mesmo custo por método; a queda vinha da ordem da medição (o caso com cookie rodava logo após a subida, com o JIT frio). Alternando na mesma JVM: 5.773 a 5.983 req/s com cookie, 4.923 a 6.723 sem
 - [x] Sem `grox-grails-plugins`, o `springSecurityService` não existe: com a segurança ativa, a subida avisa no log quais artefatos e beans declaram a propriedade (`SecurityModule.beansReady`)

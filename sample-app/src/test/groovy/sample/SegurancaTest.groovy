@@ -70,10 +70,15 @@ class SegurancaTest {
         assert page.headers().firstValue('X-Content-Type-Options').get() == 'nosniff'
         assert page.headers().firstValue('X-Frame-Options').get() == 'SAMEORIGIN'
         assert page.headers().firstValue('Referrer-Policy').get() == 'strict-origin-when-cross-origin'
-        String plain = page.headers().allValues('Set-Cookie').find { it.startsWith('GROXSESSIONID=') }
+        // a página de login não cria sessão: o token CSRF vai no cookie, que em HTTPS tem o prefixo __Host-
+        String plain = page.headers().allValues('Set-Cookie').find { it.startsWith('GROX-CSRF=') }
         assert plain && !plain.contains('Secure')
         def https = client().send('GET', '/login/auth', null, ['X-Forwarded-Proto': 'https'])
-        assert https.headers().allValues('Set-Cookie').find { it.startsWith('GROXSESSIONID=') }.contains('; Secure')
+        assert https.headers().allValues('Set-Cookie').find { it.startsWith('__Host-GROX-CSRF=') }.contains('; Path=/; HttpOnly; SameSite=Lax; Secure')
+        // o cookie da sessão também (página protegida: a URL pedida fica na sessão, para depois do login)
+        def protegida = client().send('GET', '/home/painel', null, ['X-Forwarded-Proto': 'https', Accept: 'text/html'])
+        assert protegida.headers().allValues('Set-Cookie').find { it.startsWith('GROXSESSIONID=') }.contains('; Secure')
+        assert client().page('/home/painel').headers().allValues('Set-Cookie').find { it.startsWith('GROXSESSIONID=') }?.contains('Secure') == false
     }
 
     @Test
@@ -140,8 +145,33 @@ class SegurancaTest {
         assert client().send('POST', '/home/olaParams', [nome: 'x'], ['Sec-Fetch-Site': 'cross-site']).status() == 403
         assert client().send('POST', '/home/olaParams', [nome: 'x'], [Origin: 'http://evil.example']).status() == 403
         def anonimo = client()
-        anonimo.page('/login/auth')   // cria a sessão (token CSRF do formulário de login)
+        anonimo.page('/login/auth')   // grava o cookie CSRF (token do formulário de login)
         assert anonimo.form('/home/olaParams', [nome: 'x'], false).status() == 403
+    }
+
+    @Test
+    void 'CSRF sem sessao para anonimos: o formulario nao cria sessao'() {
+        def c = client()
+        def pagina = c.page('/login/auth')
+        List<String> setCookie = pagina.headers().allValues('Set-Cookie')
+        // só o cookie do token (double submit), sem sessão: robôs e monitores não criam uma sessão por requisição
+        assert setCookie.size() == 1 && setCookie[0].startsWith('GROX-CSRF=')
+        assert setCookie[0].contains('HttpOnly') && setCookie[0].contains('SameSite=Lax')
+        String token = (pagina.body() =~ /name="_csrf" value="([^"]+)"/)[0][1]
+        assert setCookie[0].startsWith("GROX-CSRF=${token};")
+        // a próxima página reaproveita o token do cookie, sem gravar outro
+        def outra = c.page('/login/auth')
+        assert outra.headers().allValues('Set-Cookie').isEmpty() && outra.body().contains(token)
+        // token errado, ou o token sem o cookie (outro navegador), é recusado
+        assert c.form('/home/olaParams', [nome: 'x', _csrf: 'x' * 32], false).status() == 403
+        // de outro site, o navegador não envia o cookie (SameSite=Lax): o token sozinho não vale
+        assert client().send('POST', '/login/authenticate?username=admin&password=admin&_csrf=' + token, null, ['Sec-Fetch-Site': 'cross-site']).status() == 403
+        assert c.form('/home/olaParams', [nome: 'x', _csrf: token], false).status() == 200
+        // login com o token do cookie; a sessão autenticada tem token próprio, e o do cookie não vale mais
+        assert c.form('/login/authenticate', [username: 'admin', password: 'admin', _csrf: token], false).status() == 302
+        assert c.form('/usuario/save', [nome: 'Cookie', email: 'ck@x.com', _csrf: token], false).status() == 403
+        assert c.csrfToken() != token
+        assert c.form('/usuario/save', [nome: 'Sessao', email: 'ss@x.com']).status() == 302
     }
 
     @Test

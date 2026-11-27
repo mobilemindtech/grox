@@ -175,7 +175,8 @@ class SecurityFilter {
     /**
      * Quando o POST/PUT/PATCH/DELETE precisa do token CSRF:
      * <ul>
-     *   <li>com sessão: sempre, exceto Bearer e Basic de API ({@link #csrfExempt});</li>
+     *   <li>com sessão ou com o cookie CSRF de um formulário já exibido: sempre, exceto Bearer e Basic de API
+     *       ({@link #csrfExempt});</li>
      *   <li>sem autenticação nem cookie de sessão: só se vier de outro site pelo navegador (não há estado do usuário
      *       a forjar, mas a action poderia criar a sessão e logar a vítima numa conta do atacante, o login CSRF);</li>
      *   <li>stateless: só Basic vindo de outro site (o navegador reenvia as credenciais guardadas).</li>
@@ -185,7 +186,8 @@ class SecurityFilter {
     private boolean csrfRequired(GroxRequest req, Authentication auth, boolean stateless) {
         if (stateless) return auth?.method == 'basic' && crossSite(req)
         if (csrfExempt(req, auth)) return false
-        auth != null || session(req, false) != null || crossSite(req)
+        auth != null || session(req, false) != null || crossSite(req) ||
+                RequestSession.of(req, sessions).requestCsrfCookie() != null
     }
 
     /**
@@ -486,8 +488,14 @@ class SecurityFilter {
         RequestSession.of(req, sessions).get(create)
     }
 
+    /**
+     * Token CSRF dos formulários: o da sessão, se ela existe; sem sessão, o do cookie {@code GROX-CSRF}
+     * ({@link RequestSession#csrfCookieToken}), para não criar uma sessão por visitante anônimo.
+     */
     String csrfToken(GroxRequest req) {
-        GroxSession s = session(req, true)
+        RequestSession rs = RequestSession.of(req, sessions)
+        GroxSession s = rs.get(false)
+        if (s == null) return rs.csrfCookieToken()
         String token = (String) s.getAttribute(CSRF_KEY)
         if (token == null) {
             token = SessionIds.next()
@@ -496,8 +504,15 @@ class SecurityFilter {
         token
     }
 
+    /**
+     * Confere o token enviado (campo {@code _csrf} ou cabeçalho {@code X-CSRF-TOKEN}) com o da sessão. Sessão sem
+     * token (anônima, criada por um flash, por exemplo) ou sem sessão: com o do cookie, como gerado em
+     * {@link #csrfToken}. Toda sessão autenticada tem o token dela ({@link #establish}): o cookie não vale ali.
+     */
     private boolean validCsrf(GroxRequest req) {
-        String expected = (String) session(req, false)?.getAttribute(CSRF_KEY)
+        RequestSession rs = RequestSession.of(req, sessions)
+        String expected = (String) rs.get(false)?.getAttribute(CSRF_KEY)
+        if (expected == null) expected = rs.requestCsrfCookie()
         String given = req.formParameters?.get(CSRF_PARAM)?.getAt(0) ?: req.getHeader(CSRF_HEADER)
         expected != null && given != null && MessageDigest.isEqual(expected.getBytes('UTF-8'), given.getBytes('UTF-8'))
     }
@@ -516,9 +531,9 @@ class SecurityFilter {
     }
 
     Map<String, Object> loginModel(GroxRequest req) {
-        GroxSession s = session(req, true)
-        String error = req.getParameter('login_error') ? ((String) s.getAttribute(LAST_ERROR) ?: 'springSecurity.errors.login.fail') : null
-        s.removeAttribute(LAST_ERROR)
+        GroxSession s = session(req, false)   // a página de login não cria sessão (robôs, monitores)
+        String error = req.getParameter('login_error') ? ((String) s?.getAttribute(LAST_ERROR) ?: 'springSecurity.errors.login.fail') : null
+        s?.removeAttribute(LAST_ERROR)
         [postUrl: cfg.loginProcessingUrl, usernameParameter: cfg.usernameParameter, passwordParameter: cfg.passwordParameter,
          csrfParameter: CSRF_PARAM, csrfToken: cfg.csrfEnabled ? csrfToken(req) : null, errorCode: error]
     }
