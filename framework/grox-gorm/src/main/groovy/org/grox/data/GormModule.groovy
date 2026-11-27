@@ -26,7 +26,10 @@ class GormModule extends GroxModule {
     @groovy.transform.CompileStatic
     List<ArtefactType> getArtefactTypes() {
         [new ArtefactType('DataService', ArtefactType.MARKER, true, { Class<?> c -> DataServices.isDataService(c) } as java.util.function.Predicate<Class<?>>),
-         ArtefactType.assignableTo('Domain', ArtefactType.MARKER + 10, GormEntity)]
+         // abstrata só com a marca da AST (raiz de hierarquia em grails-app/domain); uma base abstrata em src não é entidade
+         new ArtefactType('Domain', ArtefactType.MARKER + 10, true, { Class<?> c ->
+             !c.interface && GormEntity.isAssignableFrom(c) && (ArtefactType.concrete(c) || c.isAnnotationPresent(AbstractEntity))
+         } as java.util.function.Predicate<Class<?>>)]
     }
 
     /** Hibernate só sobe se houver domain classes ou {@code dataSource} configurado. */

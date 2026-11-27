@@ -31,9 +31,14 @@ class DomainClassSupport {
 
     static void apply(ClassNode cn) {
         // GormEntity<Livro>: a trait é genérica (o tipo vale para o código estático e para o IDE)
-        if (!cn.implementsInterface(GORM_ENTITY)) cn.addInterface(org.codehaus.groovy.ast.tools.GenericsUtils.makeClassSafeWithGenerics(GormEntity, cn))
+        // também na subclasse de outra domain (herança): os estáticos do trait usam a classe que os declara, e sem
+        // reaplicar o trait Cachorro.list() listaria os Animal
+        if (!cn.interfaces.any { it.name == GORM_ENTITY.name }) cn.addInterface(org.codehaus.groovy.ast.tools.GenericsUtils.makeClassSafeWithGenerics(GormEntity, cn))
+        if (cn.abstract && cn.getAnnotations(ABSTRACT_ENTITY).isEmpty()) cn.addAnnotation(new org.codehaus.groovy.ast.AnnotationNode(ABSTRACT_ENTITY))
         injectDomainMembers(cn)
     }
+
+    private static final ClassNode ABSTRACT_ENTITY = ClassHelper.make(org.grox.data.AbstractEntity)
 
     private static void injectDomainMembers(ClassNode cn) {
         if (!hasMember(cn, 'id')) cn.addProperty('id', Modifier.PUBLIC, LONG, null, null, null)

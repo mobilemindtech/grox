@@ -144,7 +144,7 @@ O filtro de tenant (`_tenantId`) é recusado por essa API: use `Tenants.withoutI
 | `mappedBy` | `[enderecos: 'morador']` |
 | `transients` | `['nomeCompleto']` |
 | `constraints` | `{ nome blank: false, size: 2..100 }` |
-| `mapping` | `{ table 'usuarios'; sort 'nome'; version false; id generator: 'uuid'; nome column: 'nm', length: 80, sqlType: 'varchar(80)'; descricao type: 'text'; total formula: '...'; autoTimestamp false; tenantId name: 'empresa' }` |
+| `mapping` | `{ table 'usuarios'; sort 'nome'; version false; id generator: 'uuid'; nome column: 'nm', length: 80, sqlType: 'varchar(80)'; descricao type: 'text'; total formula: '...'; autoTimestamp false; tenantId name: 'empresa'; tablePerHierarchy false; discriminator 'X' }` |
 | `hibernateFilters` | `{ ativos(condition: 'ativo = true', default: true) }` |
 
 Geradores de id: `identity` (padrão), `sequence`, `uuid` (tipo `UUID`), `assigned`; `id composite: ['role', 'user']` para chave composta.

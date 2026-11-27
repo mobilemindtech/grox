@@ -391,6 +391,28 @@ A chave estrangeira fica no filho (`nariz.rosto_id`), como no GORM; o dono propa
 
 **Filho multi-tenant** (`class Anamnese implements MultiTenant<Anamnese>`): o `@TenantId` do Hibernate 7 filtra também a carga por chave, e no one-to-one inverso um filho ausente dava `EntityFilterException`, porque o Hibernate não distingue "ausente" de "filtrado". Nesse caso o Grox mapeia a propriedade do dono como many-to-one só leitura, com `join-formula` (`(select min(c.id) from anamnese c where c.cliente_id = id)`) e `not-found IGNORE`: filho ausente vira `null`, como no GORM. A carga é eager e em lote (`default_batch_fetch_size`). O Grox faz o cascade: grava o filho depois do pai (no `save()` e no persist por cascade de outra entidade) e o apaga antes do pai. Limites: a fórmula usa os nomes físicos do `snake_case` (tabela ou coluna com palavra reservada não é escapada), e atribuir `null` ao hasOne não apaga o filho (sem orphan removal).
 
+### Herança de domain classes
+
+```groovy
+abstract class Animal {             // em grails-app/domain: é entidade (raiz da hierarquia)
+    String nome
+    static constraints = { nome blank: false }
+}
+class Cachorro extends Animal { String raca }
+class Gato extends Animal {
+    Boolean ronrona
+    static mapping = { discriminator 'GATO' }
+}
+```
+
+Como no GORM, a hierarquia fica numa **tabela única** (a da raiz, `animal`), com as colunas de todas as subclasses e a coluna `class` com o nome da classe (`org.app.Cachorro`), ou o valor de `discriminator`. As colunas das subclasses aceitam nulo no banco (as linhas das outras classes não as preenchem); as constraints continuam valendo na validação. Com `static mapping = { tablePerHierarchy false }` na raiz, cada subclasse tem a própria tabela (`cachorro`, com `id` apontando para `animal`).
+
+- **Consultas polimórficas:** `Animal.list()` traz cachorros e gatos (cada um com a sua classe); `Cachorro.list()`, `Cachorro.count()`, os finders, `where` e `createCriteria` de uma subclasse veem só ela e as subclasses dela. Associações para a raiz (`Adocao { Animal animal }`) aceitam qualquer subclasse.
+- **Herdado:** propriedades, constraints (as da mãe e as da subclasse), `id`, `version` e o `tenantId` (a hierarquia multi-tenant filtra pela raiz).
+- **Classe abstrata:** em `grails-app/domain` (ou com `@Entity`) é entidade. Uma classe base em `src/main/groovy` (abstrata ou não) é só uma superclasse: as propriedades dela vão para a tabela de cada domain que a estende (`<mapped-superclass>` no `orm.xml`), inclusive `id` e `version` se declarados lá. O `tenantId` de uma domain multi-tenant precisa estar na própria domain (ou na raiz da hierarquia de domains).
+- **`discriminator`:** `discriminator 'GATO'` ou `discriminator value: 'GATO', column: 'tipo'` (a coluna só na raiz).
+- **Não suportado:** `tablePerConcreteClass true` (erro na subida).
+
 ### Componentes com `embedded`
 
 ```groovy

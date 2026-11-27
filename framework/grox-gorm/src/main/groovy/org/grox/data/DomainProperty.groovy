@@ -10,6 +10,8 @@ class DomainProperty {
 
     String name
     Class<?> type
+    /** A classe que declara o campo (a domain ou uma superclasse dela que não é domain: {@code <mapped-superclass>}). */
+    Class<?> declaringClass
     Kind kind
     /** Tipo da entidade associada (many-to-one) ou dos elementos (one-to-many). */
     Class<?> referencedType

@@ -159,7 +159,8 @@ Legenda: ✅ suportado · 🟡 parcial · ❌ ausente (veja o `docs/roadmap.md` 
 | `hasOne` (one-to-one com a FK no filho) | ✅ | Cascade all a partir do dono. Com filho multi-tenant, filho ausente vira `null` (many-to-one por `join-formula`; sem orphan removal) |
 | One-to-one sem `hasOne` (`Face { Nose nose }`, `Nose { belongsTo = [face: Face] }`) | ✅ | FK no dono; o `belongsTo` do filho é o lado inverso. Com `hasMany` do mesmo tipo no dono ou mais de uma referência, o `belongsTo` fica many-to-one |
 | `embedded` | ✅ | Colunas `<propriedade>_<campo>` na tabela do dono; consulta pelo caminho (`endereco.cidade`), binding, JSON e scaffold. Constraints do componente validadas no dono (campo `endereco.rua`). Um nível, só tipos simples |
-| Herança, coleções de tipos básicos além de `hasMany` | ❌ | |
+| Herança de domain classes | ✅ | Tabela única com a coluna `class` (padrão) ou `tablePerHierarchy false`; `discriminator`; consultas polimórficas; raiz abstrata em `grails-app/domain`. `tablePerConcreteClass` ❌ |
+| Coleções de tipos básicos além de `hasMany` | ❌ | |
 | `static mapping` (table, version, sort, id generator, column/length/sqlType, autoTimestamp) | ✅ | Índices, cache, lazy/eager por propriedade ❌ |
 | `static mapping`: `formula`, `sqlType`, `type: 'text'`, `column`, `version false`; `static indexes` | ✅ | `static indexes` e `fetchMode` são ignorados |
 | `id composite: ['role', 'user']` (ex.: `UserRole`) | ✅ | Sem classe de id: a entidade é a chave. `save()` insere ou mescla (ou `insert: true`), e `ident()` devolve a instância. `idEq` ❌ |

@@ -20,6 +20,18 @@ class OrmXml {
             sb << '</filter-def>\n'
         }
         Map<Class, DomainClass> byType = domains.collectEntries { [(it.type): it] }
+        // superclasses que não são domain (base abstrata em src): <mapped-superclass> com os campos declarados nelas
+        Map<Class, DomainClass> supers = [:]
+        domains.each { DomainClass d ->
+            for (Class k = d.type.superclass; k != null && k != Object && !byType.containsKey(k); k = k.superclass) {
+                if (DomainClass.fields(k, k.superclass)) supers.putIfAbsent(k, d)
+            }
+        }
+        supers.each { Class k, DomainClass d ->
+            sb << "  <mapped-superclass class=\"${k.name}\" access=\"FIELD\" metadata-complete=\"true\">\n    <attributes>\n"
+            attributes(sb, d, k, byType)
+            sb << '    </attributes>\n  </mapped-superclass>\n'
+        }
         domains.each { entity(sb, it, byType) }
         // componentes (embedded): um <embeddable> por classe; as colunas de cada dono vêm do <attribute-override>
         Map<Class, DomainProperty> components = [:]
@@ -31,24 +43,47 @@ class OrmXml {
 
     private static void entity(StringBuilder sb, DomainClass d, Map<Class, DomainClass> byType) {
         sb << "  <entity class=\"${d.type.name}\" name=\"${d.name}\" access=\"FIELD\" metadata-complete=\"true\">\n"
-        if (d.table) sb << "    <table name=\"${esc(d.table)}\"/>\n"
+        boolean child = d.parent != null
+        if (d.table && !(child && d.singleTable)) sb << "    <table name=\"${esc(d.table)}\"/>\n"
+        // herança como no GORM: tabela única com a coluna class (nome da classe), ou uma tabela por subclasse
+        if (d.hasSubclasses && !child) sb << "    <inheritance strategy=\"${d.singleTable ? 'SINGLE_TABLE' : 'JOINED'}\"/>\n"
+        if (d.inHierarchy && d.singleTable) {
+            sb << "    <discriminator-value>${esc(d.discriminatorValue)}</discriminator-value>\n"
+            if (!child) sb << "    <discriminator-column name=\"${esc(d.discriminatorColumn)}\" length=\"255\"/>\n"
+        }
         d.hibernateFilters.each { HibernateFilters.Def f ->
             sb << "    <filter name=\"${esc(f.name)}\">" << (f.condition ? "<condition>${esc(f.condition)}</condition>" : '') << '</filter>\n'
         }
-        if (d.tenantProperty) {
+        if (d.tenantProperty && !child) {
             DomainProperty t = d.tenantProperty
             t.nullable = false
             sb << "    <tenant-id name=\"${t.name}\">" << column(t, true) << '</tenant-id>\n'
         }
         sb << '    <attributes>\n'
-        def props = d.persistentProperties.values()
-        if (d.composite) {
+        attributes(sb, d, d.type, byType)
+        sb << '    </attributes>\n  </entity>\n'
+    }
+
+    /** A classe que declara a propriedade. */
+    private static Class declaredIn(DomainProperty p, DomainClass d) {
+        p.declaringClass ?: d.type
+    }
+
+    /**
+     * Os atributos de {@code d} declarados em {@code owner} (a própria entidade ou uma superclasse que não é domain).
+     * Na subclasse de outra domain, id e version são declarados na raiz e ficam de fora.
+     */
+    private static void attributes(StringBuilder sb, DomainClass d, Class owner, Map<Class, DomainClass> byType) {
+        boolean child = d.parent != null
+        def props = d.ownPersistentProperties.findAll { declaredIn(it, d) == owner }
+        boolean withKey = !child && (d.composite ? owner == d.type : declaredIn(d.identity, d) == owner)
+        if (withKey && d.composite) {
             // chave composta sem classe de id (a entidade é a chave): partes básicas viram <id>,
             // associações viram <many-to-one id="true"> mais abaixo
             d.compositeProperties.findAll { it.kind == DomainProperty.Kind.BASIC }.each { DomainProperty p ->
                 sb << "      <id name=\"${p.name}\">" << column(p, false) << '</id>\n'
             }
-        } else {
+        } else if (withKey) {
             DomainProperty id = d.identity
             sb << "      <id name=\"${id.name}\">"
             switch (d.idGenerator) {
@@ -67,7 +102,7 @@ class OrmXml {
             if (p.type.enum) sb << '<enumerated>STRING</enumerated>'
             sb << '</basic>\n'
         }
-        if (d.version) sb << "      <version name=\"${d.version.name}\"/>\n"
+        if (d.version && !child && declaredIn(d.version, d) == owner) sb << "      <version name=\"${d.version.name}\"/>\n"
         props.findAll { it.kind == DomainProperty.Kind.MANY_TO_ONE }.each { DomainProperty p ->
             boolean key = p.name in keyParts
             sb << "      <many-to-one name=\"${p.name}\" target-entity=\"${p.referencedType.name}\" fetch=\"LAZY\" optional=\"${p.nullable && !key}\"" <<
@@ -132,8 +167,11 @@ class OrmXml {
             }
             sb << '</embedded>\n'
         }
-        d.transientFields.unique().each { sb << "      <transient name=\"${it}\"/>\n" }
-        sb << '    </attributes>\n  </entity>\n'
+        // campos desta classe que não são mapeados (com metadata-complete, o Hibernate mapearia todos)
+        Set<String> mapped = props*.name as Set
+        if (d.version && declaredIn(d.version, d) == owner) mapped << d.version.name
+        DomainClass.fields(owner, owner.superclass).findAll { !(it.name in mapped) && !(d.persistentProperties[it.name] && declaredIn(d.persistentProperties[it.name], d) == owner) }
+                .each { sb << "      <transient name=\"${it.name}\"/>\n" }
     }
 
     /** A classe do componente: as propriedades básicas e, como transientes, os demais campos (id/version da AST, por exemplo). */

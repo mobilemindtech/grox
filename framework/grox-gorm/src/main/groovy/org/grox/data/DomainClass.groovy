@@ -44,12 +44,54 @@ class DomainClass {
     Map<String, Class> belongsToMap = [:]
     /** {@code static embedded = ['endereco']}: componentes gravados nas colunas desta tabela. */
     List<String> embedded = []
+    /** Herança: a domain class mãe (a superclasse mais próxima que é domain class), ou null na raiz. */
+    DomainClass parent
+    /** Tem subclasses que são domain classes (é raiz ou nó intermediário de uma hierarquia). */
+    boolean hasSubclasses
+    /** Herança: as propriedades declaradas nesta classe (as demais vêm da mãe); null fora de hierarquia. */
+    Set<String> ownProperties
     Set<Class> belongsToClasses = [] as Set
 
     DomainClass(Class<?> type) {
         this.type = type
         this.name = type.simpleName
         this.propertyName = ClassUtils.propertyName(type)
+    }
+
+    /** A raiz da hierarquia (a própria classe sem herança). */
+    DomainClass getRoot() {
+        parent == null ? this : parent.root
+    }
+
+    boolean isInHierarchy() {
+        parent != null || hasSubclasses
+    }
+
+    /** Como no GORM: tabela única por hierarquia ({@code tablePerHierarchy false} na raiz: uma tabela por subclasse). */
+    boolean isSingleTable() {
+        root.mapping.settings.tablePerHierarchy != false
+    }
+
+    /** {@code static mapping = { discriminator 'CAO' }} ou {@code discriminator value: 'CAO', column: 'tipo'}; padrão: o nome da classe. */
+    String getDiscriminatorValue() {
+        Object d = mapping.settings.discriminator
+        (d instanceof Map ? ((Map) d).value : d)?.toString() ?: type.name
+    }
+
+    /** Coluna do discriminador (na raiz): {@code class}, como no GORM. */
+    String getDiscriminatorColumn() {
+        Object d = root.mapping.settings.discriminator
+        (d instanceof Map ? ((Map) d).column : null)?.toString() ?: 'class'
+    }
+
+    /** A tabela onde ficam as colunas desta classe. */
+    String getTableName() {
+        parent != null && singleTable ? root.tableName : (table ?: snake(type.simpleName))
+    }
+
+    /** As propriedades mapeadas nesta classe (na subclasse, sem as herdadas). */
+    Collection<DomainProperty> getOwnPersistentProperties() {
+        ownProperties == null ? persistentProperties.values() : persistentProperties.values().findAll { it.name in ownProperties }
     }
 
     boolean isComposite() {
@@ -78,7 +120,7 @@ class DomainClass {
     }
 
     String getTable() {
-        mapping.settings.table?.toString()
+        parent != null && singleTable ? root.table : mapping.settings.table?.toString()
     }
 
     boolean isMultiTenant() {
@@ -128,7 +170,9 @@ class DomainClass {
         if (!parallel || types.size() < 8) {
             types.each { all[it] = new DomainClass(it).readStatics() }
             withoutComponents(all)
+            linkHierarchy(all)
             all.values().each { it.resolveProperties(all) }
+            inheritProperties(all)
             return all
         }
         // subida: a inicialização das classes (closures mapping/constraints) e a introspecção são
@@ -141,7 +185,9 @@ class DomainClass {
             }
             read.each { java.util.concurrent.Future<DomainClass> f -> DomainClass d = unwrap(f); all[d.type] = d }
             withoutComponents(all)
+            linkHierarchy(all)
             all.values().collect { DomainClass d -> pool.submit({ d.resolveProperties(all) } as Runnable) }.each { unwrap(it) }
+            inheritProperties(all)
         } finally {
             pool.shutdown()
         }
@@ -158,6 +204,56 @@ class DomainClass {
             d.embedded.each { String n -> Class t = fields(d.type).find { it.name == n }?.type; if (t != null) components << t }
         }
         components.each { all.remove(it) }
+    }
+
+    /**
+     * Herança: liga cada domain class à superclasse mais próxima que também é domain class. Na subclasse, o
+     * {@code mapping} e os filtros são só os declarados nela (o da mãe vale para a raiz da hierarquia).
+     */
+    private static void linkHierarchy(Map<Class, DomainClass> all) {
+        all.values().each { DomainClass d ->
+            for (Class k = d.type.superclass; k != null && k != Object; k = k.superclass) {
+                if (all.containsKey(k)) {
+                    d.parent = all[k]
+                    all[k].hasSubclasses = true
+                    d.mapping = MappingDsl.evaluate(staticBetween(d.type, k, 'mapping'))
+                    d.hibernateFilters = staticBetween(d.type, k, 'hibernateFilters') != null ? HibernateFilters.read(d.type) : []
+                    break
+                }
+            }
+        }
+        all.values().each { DomainClass d ->
+            if (d.hasSubclasses && d.parent == null && d.mapping.settings.tablePerConcreteClass == true) {
+                throw new UnsupportedOperationException("${d.type.name}: tablePerConcreteClass não é suportado (use a tabela única, padrão, ou tablePerHierarchy false)")
+            }
+        }
+    }
+
+    /** O campo estático {@code name} declarado entre {@code type} (inclusive) e {@code stop} (exclusive). */
+    private static Object staticBetween(Class type, Class stop, String name) {
+        for (Class k = type; k != null && k != stop; k = k.superclass) {
+            Field f = k.declaredFields.find { it.name == name && Modifier.isStatic(it.modifiers) }
+            if (f != null) {
+                f.accessible = true
+                return f.get(null)
+            }
+        }
+        null
+    }
+
+    /** Herança: a subclasse recebe as propriedades da mãe (id, version, tenant e as demais), das raízes para as folhas. */
+    private static void inheritProperties(Map<Class, DomainClass> all) {
+        all.values().findAll { it.parent != null }.sort { DomainClass d -> int n = 0; for (DomainClass p = d.parent; p != null; p = p.parent) n++; n }.each { DomainClass d ->
+            Map<String, DomainProperty> own = new LinkedHashMap<>(d.persistentProperties)
+            d.persistentProperties.clear()
+            d.persistentProperties.putAll(d.parent.persistentProperties)
+            d.persistentProperties.putAll(own)
+            d.ownProperties = own.keySet()
+            d.identity = d.parent.identity
+            d.version = d.parent.version
+            d.tenantProperty = d.parent.tenantProperty
+            d.compositeId = d.parent.compositeId
+        }
     }
 
     private static <T> T unwrap(java.util.concurrent.Future<T> f) {
@@ -197,13 +293,13 @@ class DomainClass {
     private void resolveProperties(Map<Class, DomainClass> all) {
         List<String> transients = ((ClassUtils.staticProperty(type, 'transients') ?: []) as List)*.toString()
         Map mappedByMap = (Map) ClassUtils.staticProperty(type, 'mappedBy') ?: [:]
-        for (Field f : fields(type)) {
+        for (Field f : (parent == null ? fields(type) : fields(type, parent.type))) {
             String n = f.name
             if (n in transients || !hasAccessors(n)) {
                 transientFields << n
                 continue
             }
-            def p = new DomainProperty(name: n, type: f.type, nullable: constraints[n]?.nullable == true || n in AUTO_TIMESTAMPS)
+            def p = new DomainProperty(name: n, type: f.type, declaringClass: f.declaringClass, nullable: constraints[n]?.nullable == true || n in AUTO_TIMESTAMPS)
             Map<String, Object> col = mapping.columns[n] ?: [:]
             if (col.column) p.column.name = col.column
             if (col.formula) p.formula = col.formula.toString()
@@ -310,6 +406,12 @@ class DomainClass {
             }
             persistentProperties[n] = p
         }
+        if (parent != null) {
+            // subclasse: id, version e tenant vêm da mãe (inheritProperties). Na tabela única, as colunas dela
+            // aceitam nulo (as linhas das outras classes da hierarquia não as preenchem); a validação usa as constraints
+            if (singleTable) persistentProperties.values().each { it.nullable = true }
+            return
+        }
         if (composite) {
             List<String> missing = compositeId.findAll { !persistentProperties.containsKey(it) }
             if (missing) throw new IllegalStateException("${type.name}: id composite com propriedades inexistentes: ${missing}")
@@ -385,9 +487,9 @@ class DomainClass {
     }
 
     /** Campos de instância da hierarquia, sem os internos do Groovy e dos traits. */
-    static List<Field> fields(Class<?> type) {
+    static List<Field> fields(Class<?> type, Class<?> stop = Object) {
         List<Field> result = []
-        for (Class k = type; k != null && k != Object; k = k.superclass) {
+        for (Class k = type; k != null && k != Object && k != stop; k = k.superclass) {
             k.declaredFields.each { Field f ->
                 int m = f.modifiers
                 if (Modifier.isStatic(m) || Modifier.isTransient(m) || f.synthetic || f.name.contains('$') || f.name.contains('__') || f.name == 'metaClass') return

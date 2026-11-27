@@ -143,6 +143,28 @@ Se o filho implementa `MultiTenant` (`class Anamnese implements MultiTenant<Anam
 
 Limites: a fórmula usa os nomes físicos em snake_case (tabela ou coluna com palavra reservada não é escapada) e atribuir `null` ao `hasOne` não apaga o filho (sem orphan removal).
 
+### Herança
+
+```groovy
+abstract class Animal {             // em grails-app/domain: é entidade (raiz da hierarquia)
+    String nome
+    static constraints = { nome blank: false }
+}
+class Cachorro extends Animal { String raca }
+class Gato extends Animal {
+    Boolean ronrona
+    static mapping = { discriminator 'GATO' }
+}
+```
+
+Como no GORM, a hierarquia fica numa **tabela única** (a da raiz, `animal`), com as colunas de todas as subclasses e a coluna `class` com o nome da classe (`org.app.Cachorro`), ou o valor de `discriminator`. As colunas das subclasses aceitam nulo no banco (as linhas das outras classes não as preenchem); as constraints continuam valendo na validação. Com `static mapping = { tablePerHierarchy false }` na raiz, cada subclasse tem a própria tabela (`cachorro`, com `id` apontando para `animal`).
+
+- **Consultas polimórficas:** `Animal.list()` traz cachorros e gatos (cada um com a sua classe); `Cachorro.list()`, `Cachorro.count()`, os finders, `where` e `createCriteria` de uma subclasse veem só ela e as subclasses dela. Associações para a raiz (`Adocao { Animal animal }`) aceitam qualquer subclasse.
+- **Herdado:** propriedades, constraints (as da mãe e as da subclasse), `id`, `version` e o `tenantId` (a hierarquia multi-tenant filtra pela raiz).
+- **Classe abstrata:** em `grails-app/domain` (ou com `@Entity`) é entidade. Uma classe base em `src/main/groovy` (abstrata ou não) é só uma superclasse: as propriedades dela vão para a tabela de cada domain que a estende (`<mapped-superclass>` no `orm.xml`), inclusive `id` e `version` se declarados lá. O `tenantId` de uma domain multi-tenant precisa estar na própria domain (ou na raiz da hierarquia de domains).
+- **`discriminator`:** `discriminator 'GATO'` ou `discriminator value: 'GATO', column: 'tipo'` (a coluna só na raiz).
+- **Não suportado:** `tablePerConcreteClass true` (erro na subida).
+
 ### Componentes com `embedded`
 
 ```groovy

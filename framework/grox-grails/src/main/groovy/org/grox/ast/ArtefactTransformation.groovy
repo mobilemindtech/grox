@@ -67,7 +67,8 @@ class ArtefactTransformation implements ASTTransformation {
         if (!dir || source.AST == null) return
         for (ClassNode cn : source.AST.classes) {
             if (dir in RELOADABLE_DIRS && cn.outerClass == null && !cn.getAnnotations(RELOADABLE)) cn.addAnnotation(new AnnotationNode(RELOADABLE))
-            if (cn.interface || cn.enum || cn.abstract || cn.outerClass != null) continue
+            // abstrata só em domain: raiz de uma hierarquia de domain classes, como no GORM
+            if (cn.interface || cn.enum || (cn.abstract && dir != 'domain') || cn.outerClass != null) continue
             String n = cn.nameWithoutPackage
             if (dir == 'controllers' && n.endsWith('Interceptor')) {
                 addTrait(cn, INTERCEPTOR_API)

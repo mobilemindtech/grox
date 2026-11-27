@@ -126,6 +126,10 @@ class Datastore implements AutoCloseable, org.grails.orm.hibernate.HibernateData
         Set<String> targets = domains.values().collectMany { DomainClass d ->
             d.persistentProperties.values().findAll { it.kind == DomainProperty.Kind.MANY_TO_ONE || (it.kind == DomainProperty.Kind.ONE_TO_ONE && !it.mappedBy) }.collect { it.referencedType.name }
         } as Set<String>
+        // herança: o proxy de uma classe da hierarquia vale para as demais (um many-to-one para Animal carrega Cachorro)
+        domains.values().findAll { it.inHierarchy && it.root.type.name in targets || it.inHierarchy && it.type.name in targets }.each { DomainClass d ->
+            domains.values().findAll { it.root.is(d.root) }.each { targets << it.type.name }
+        }
         int n = 0
         metadata.entityBindings.each { org.hibernate.mapping.PersistentClass pc ->
             if (pc.lazy && !(pc.className in targets)) {
@@ -144,7 +148,7 @@ class Datastore implements AutoCloseable, org.grails.orm.hibernate.HibernateData
      * junção ganha o nome da propriedade; contra um banco existente, mantém o nome do GORM.
      */
     private void resolveJoinTableClashes(boolean generatesSchema) {
-        Set<String> tables = domains.values().collect { (it.table ?: DomainClass.snake(it.type.simpleName)).toLowerCase() } as Set
+        Set<String> tables = domains.values().collect { it.tableName.toLowerCase() } as Set
         domains.values().each { DomainClass d ->
             d.persistentProperties.values().findAll { it.joinTable && it.joinTable.toLowerCase() in tables }.each { DomainProperty p ->
                 if (generatesSchema) {
