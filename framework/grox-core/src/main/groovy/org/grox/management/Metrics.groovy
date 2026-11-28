@@ -11,6 +11,7 @@ import java.util.concurrent.atomic.LongAdder
 /** Contadores de requisições (total, por status, por rota) e requisições em andamento. */
 class Metrics {
 
+    @groovy.transform.CompileStatic
     static class RouteStats {
         final LongAdder count = new LongAdder()
         final LongAdder errors = new LongAdder()
@@ -21,7 +22,7 @@ class Metrics {
             count.increment()
             if (error) errors.increment()
             totalNanos.add(nanos)
-            maxNanos.accumulateAndGet(nanos) { a, b -> Math.max(a, b) }
+            maxNanos.accumulateAndGet(nanos, (long a, long b) -> Math.max(a, b))
         }
 
         Map toMap() {

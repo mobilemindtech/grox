@@ -1,6 +1,7 @@
 package org.grox.http
 
 /** Cabeçalhos HTTP com nomes case-insensitive e múltiplos valores. */
+@groovy.transform.CompileStatic
 class HeaderMap extends TreeMap<String, List<String>> {
 
     HeaderMap() {
@@ -9,7 +10,7 @@ class HeaderMap extends TreeMap<String, List<String>> {
 
     String getFirst(String name) {
         List<String> v = super.get(name)
-        v ? v[0] : null
+        v != null && !v.isEmpty() ? v.get(0) : null
     }
 
     /** Sem closure: roda para cada cabeçalho de cada requisição. */

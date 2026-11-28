@@ -42,10 +42,11 @@ class QueryRunner {
         this
     }
 
+    @groovy.transform.CompileStatic
     List list() {
         Persistence.withSession { Session s ->
             api.guard(s)
-            if (projections) return projected(s, s.criteriaBuilder)
+            if (!projections.isEmpty()) return projected(s, s.criteriaBuilder)
             selectList(s)
         }
     }
@@ -66,7 +67,7 @@ class QueryRunner {
 
     @groovy.transform.CompileStatic
     private String whereHql(HqlQuery h) {
-        criteria ? Where.and(criteria as Criterion[]).toHql(h) : null
+        criteria.isEmpty() ? null : Where.and(criteria.toArray(new Criterion[0])).toHql(h)
     }
 
     /** {@code sort}/{@code order} pedidos ou, sem eles, o {@code sort} do mapping. */
@@ -98,8 +99,9 @@ class QueryRunner {
         r ? r[0] : null
     }
 
+    @groovy.transform.CompileStatic
     long count() {
-        Persistence.withSession { Session s ->
+        (long) Persistence.withSession { Session s ->
             api.guard(s)
             countHql(s)
         }

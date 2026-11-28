@@ -41,8 +41,9 @@ class GspViews implements ViewRenderer {
     }
 
     @Override
+    @groovy.transform.CompileStatic
     void render(String viewPath, Map model, ViewRequest wr) {
-        def page = engine.find(viewPath)
+        GspTemplateEngine.CompiledGsp page = engine.find(viewPath)
         ViewEngine other = page == null ? engineFor(viewPath) : null
         if (page == null && other == null) {
             // sem log, o 404 fica mudo quando a app trata o erro (ex.: respond sem view depois de um POST)
@@ -53,7 +54,7 @@ class GspViews implements ViewRenderer {
         }
         def sw = new org.apache.groovy.io.StringBuilderWriter()
         def rc = new GspRenderContext(wr, this, sw)
-        rc.bind {
+        rc.bind { ->
             if (page != null) engine.render(page, model, rc)
             else other.render(viewPath, model, rc)
             if (wr.response.contentType == null) wr.response.contentType = 'text/html'

@@ -90,7 +90,7 @@ class ControllerRouter implements Router, AutoCloseable {
 
     CompletableFuture<GroxResponse> invoke(GroxRequest req, ControllerArtefact c, String action, Map<String, Object> params) {
         c.dispatcher.submit(new Invocation(req, action, params)).toCompletableFuture()
-                .thenCompose { Object r -> r instanceof CompletableFuture ? (CompletableFuture<GroxResponse>) r : CompletableFuture.completedFuture((GroxResponse) r) }
+                .thenCompose((Object r) -> r instanceof CompletableFuture ? (CompletableFuture<GroxResponse>) r : CompletableFuture.completedFuture((GroxResponse) r))
     }
 
     private CompletableFuture<GroxResponse> renderStandaloneView(GroxRequest req, String view, Map params, int status) {

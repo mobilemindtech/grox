@@ -9,15 +9,18 @@ import java.util.function.Function
  * N atores por controller, cada um com sua própria instância do controller ({@link ActorPool}:
  * o ator com menos mensagens pendentes, a partir de um índice round-robin).
  */
+@groovy.transform.CompileStatic
 class PooledControllerDispatcher implements ControllerDispatcher {
 
     private final ActorPool<Invocation> pool
 
+    /** Lambdas nativas: uma closure com {@code as Function} vira um proxy do JDK, chamado a cada mensagem. */
     PooledControllerDispatcher(int size, Closure<Object> factory, ControllerExecutor executor) {
-        pool = new ActorPool<Invocation>(size, { ->
-            Object instance = factory.call()
-            ({ Invocation inv -> executor.execute(instance, inv) } as Function<Invocation, Object>)
-        } as java.util.function.Supplier<Function<Invocation, Object>>)
+        pool = new ActorPool<Invocation>(size, () -> handler(factory.call(), executor))
+    }
+
+    private static Function<Invocation, Object> handler(Object instance, ControllerExecutor executor) {
+        (Invocation inv) -> executor.execute(instance, inv)
     }
 
     int getSize() {

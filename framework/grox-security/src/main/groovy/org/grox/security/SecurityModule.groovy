@@ -64,7 +64,11 @@ class SecurityModule extends GroxModule {
         security.endpoints = pipeline.endpoints   // a mesma lista: o console entra depois
         security.sessions = pipeline.sessions
         security.messages = runtime.messages
-        security.hasTarget = { String name -> pipeline.router?.hasTarget(name) ?: false } as java.util.function.Predicate<String>
+        // classe, não closure com "as Predicate" (um proxy do JDK chamado em toda requisição)
+        security.hasTarget = new java.util.function.Predicate<String>() {
+            @Override
+            boolean test(String name) { pipeline.router != null && pipeline.router.hasTarget(name) }
+        }
         requestFilter = new SecurityRequestFilter(security)
         pipeline.filter = requestFilter
     }

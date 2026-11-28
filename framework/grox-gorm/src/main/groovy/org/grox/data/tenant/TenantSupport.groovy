@@ -23,15 +23,25 @@ class TenantSupport {
 
     static volatile TenantResolver resolver
     static volatile Class<?> tenantType = String
+    /** Sentinelas convertidos para o tipo do tenant uma vez (o {@link #hibernateTenant} roda a cada sessão). */
+    private static volatile Object root = '__grox_root__'
+    private static volatile Object noTenant = '__grox_no_tenant__'
 
     static void configure(TenantResolver r, Class<?> type) {
         resolver = r
         tenantType = type ?: String
+        sentinelas()
     }
 
     static void reset() {
         resolver = null
         tenantType = String
+        sentinelas()
+    }
+
+    private static void sentinelas() {
+        root = tenantType.is(String) ? '__grox_root__' : DataBinder.convert('-1', tenantType)
+        noTenant = tenantType.is(String) ? '__grox_no_tenant__' : DataBinder.convert('-2', tenantType)
     }
 
     static Serializable resolve() {
@@ -39,6 +49,7 @@ class TenantSupport {
         convert(resolver.resolveTenantIdentifier())
     }
 
+    @groovy.transform.CompileStatic
     static Serializable convert(Object id) {
         if (id == null || tenantType.isInstance(id)) return (Serializable) id
         Object v = DataBinder.convert(id.toString(), tenantType)
@@ -46,15 +57,18 @@ class TenantSupport {
         (Serializable) v
     }
 
+    @groovy.transform.CompileStatic
     static Object rootValue() {
-        tenantType == String ? '__grox_root__' : DataBinder.convert('-1', tenantType)
+        root
     }
 
+    @groovy.transform.CompileStatic
     static Object noTenantValue() {
-        tenantType == String ? '__grox_no_tenant__' : DataBinder.convert('-2', tenantType)
+        noTenant
     }
 
-    /** Valor que o Hibernate recebe para o contexto atual. */
+    /** Valor que o Hibernate recebe para o contexto atual (a cada sessão aberta: estático). */
+    @groovy.transform.CompileStatic
     static Object hibernateTenant() {
         if (Tenants.CURRENT.bound) {
             Object v = Tenants.CURRENT.get()
@@ -72,7 +86,8 @@ class TenantSupport {
         RESOLVING.set(true)
         try {
             // resolvers da app podem devolver null em vez de lançar (ex.: sem usuário logado)
-            Persistence.withIsolatedSession { resolve() } ?: noTenantValue()
+            Object t = Persistence.withIsolatedSession { -> resolve() }
+            t ? t : noTenantValue()   // a verdade do Groovy: resolver que devolve "" ou 0 também conta como sem tenant
         } catch (TenantNotFoundException ignored) {
             noTenantValue()
         } finally {

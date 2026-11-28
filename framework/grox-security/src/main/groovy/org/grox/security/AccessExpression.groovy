@@ -9,8 +9,12 @@ package org.grox.security
 class AccessExpression {
 
     /** Uma lista de acesso concede se qualquer item conceder (como no Grails). */
+    @groovy.transform.CompileStatic
     static boolean anyGranted(Collection<String> access, Authentication auth) {
-        access.any { evaluate(it, auth) }
+        for (String a : access) {
+            if (evaluate(a, auth)) return true
+        }
+        false
     }
 
     private static final Map<String, Closure<Boolean>> COMPILED = new java.util.concurrent.ConcurrentHashMap<>()

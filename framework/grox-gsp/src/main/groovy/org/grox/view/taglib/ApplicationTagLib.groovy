@@ -32,7 +32,9 @@ class ApplicationTagLib implements TagLibApi {
     @groovy.transform.CompileStatic
     static Map<String, Object> extractLinkAttrs(Map attrs) {
         Map<String, Object> link = [:]
-        for (String k : LINK_ATTRS) if (attrs.containsKey(k)) link[k] = attrs.remove(k)
+        for (String k : LINK_ATTRS) {
+            if (attrs.containsKey(k)) link.put(k, attrs.remove(k))
+        }
         link
     }
 

@@ -46,14 +46,19 @@ class MessageSource {
 
     private String format(String pattern, List args, Locale l) {
         if (!args) return pattern
-        Map<String, MessageFormat> byPattern = formatCache.computeIfAbsent(l) { new ConcurrentHashMap<String, MessageFormat>() }
+        Map<String, MessageFormat> byPattern = formatCache.computeIfAbsent(l, (Locale k) -> new ConcurrentHashMap<String, MessageFormat>())
         MessageFormat parsed = byPattern.get(pattern)
         if (parsed == null) {
             parsed = new MessageFormat(pattern, l)
             if (byPattern.size() < MAX_CACHED) byPattern.put(pattern, parsed)
         }
         // MessageFormat não é thread-safe: cada uso formata numa cópia (clone não refaz o parse)
-        ((MessageFormat) parsed.clone()).format(args.collect { it instanceof Range || it instanceof Collection ? it.toString() : it } as Object[])
+        Object[] valores = new Object[args.size()]
+        for (int i = 0; i < valores.length; i++) {
+            Object v = args.get(i)
+            valores[i] = v instanceof Range || v instanceof Collection ? v.toString() : v
+        }
+        ((MessageFormat) parsed.clone()).format(valores)
     }
 
     String getMessage(String code, List args = null, String defaultMessage = null, Locale locale = null) {
@@ -86,7 +91,7 @@ class MessageSource {
 
     String find(String code, Locale requested) {
         Locale locale = effective(requested)
-        Map<String, String> byCode = patternCache.computeIfAbsent(locale) { new ConcurrentHashMap<String, String>() }
+        Map<String, String> byCode = patternCache.computeIfAbsent(locale, (Locale k) -> new ConcurrentHashMap<String, String>())
         String cached = byCode.get(code)
         if (cached != null) return cached.is(MISSING) ? null : cached
         String found = lookup(code, locale)

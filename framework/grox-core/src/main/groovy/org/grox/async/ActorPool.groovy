@@ -48,7 +48,7 @@ class ActorPool<T> implements AutoCloseable {
         AtomicInteger counter = inFlight[chosen]
         counter.incrementAndGet()
         Awaitable<Object> result = actors[chosen].sendAndGet(message)
-        result.whenComplete { r, e -> counter.decrementAndGet() }
+        result.whenComplete((Object r, Throwable e) -> { counter.decrementAndGet() })
     }
 
     @Override

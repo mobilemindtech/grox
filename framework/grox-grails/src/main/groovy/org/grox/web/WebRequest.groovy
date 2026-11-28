@@ -42,7 +42,7 @@ class WebRequest implements org.grox.view.ViewRequest {
         if (controllerName) params.put('controller', controllerName)
         if (actionName) params.put('action', actionName)
         this.requestSession = RequestSession.of(request, ctx.sessions)
-        request.sessionProvider = { Boolean create -> getSession(create) } as java.util.function.Function<Boolean, GroxSession>
+        request.sessionProvider = (Boolean create) -> getSession(create)   // lambda nativa: "as Function" criava um proxy do JDK por requisição
         if (request.getAttribute('grox.flashAdvanced') == null && requestSession.hasCookie()) {
             request.setAttribute('grox.flashAdvanced', true)
             ((FlashScope) requestSession.get(false)?.getAttribute(FLASH_KEY))?.advance()
@@ -51,11 +51,21 @@ class WebRequest implements org.grox.view.ViewRequest {
 
     static GroxParams buildParams(GroxRequest r, Map<String, Object> route) {
         def p = new GroxParams()
+        // laços, não each: a closure era chamada pelo runtime a cada parâmetro
         for (Map<String, List<String>> source : [r.queryParameters, r.formParameters]) {
-            source?.each { String k, List<String> vs -> p.put(k, vs.size() == 1 ? vs[0] : new ArrayList(vs)) }
+            if (source == null) continue
+            for (Map.Entry<String, List<String>> e : source.entrySet()) {
+                List<String> vs = e.value
+                p.put(e.key, vs.size() == 1 ? (Object) vs.get(0) : new ArrayList(vs))
+            }
         }
-        r.files?.each { String k, List<GroxMultipartFile> fs -> p.put(k, fs.size() == 1 ? fs[0] : new ArrayList(fs)) }
-        route?.each { k, v -> p.put(k, v) }
+        if (r.files != null) {
+            for (Map.Entry<String, List<GroxMultipartFile>> e : r.files.entrySet()) {
+                List<GroxMultipartFile> fs = e.value
+                p.put(e.key, fs.size() == 1 ? (Object) fs.get(0) : new ArrayList(fs))
+            }
+        }
+        if (route != null) p.putAll(route)
         p
     }
 

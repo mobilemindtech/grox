@@ -354,6 +354,40 @@ Com 1 conexão, a página ficou de 20% a 30% mais rápida; com 64 conexões, +15
 
 A primeira rodada mediu 1 conexão logo depois de 30 s de aquecimento com 1 conexão e deu o contrário: o HEAD com 6,0 ms de p50 e a base com 4,7 a 5,2 ms. Com 60 s de aquecimento, os dois ficam em ~2 ms, então aquela medição ainda pegava o JIT compilando. O `run-logado.sh` agora aquece com 64 conexões antes de medir (`JIT=60`). Fica a indicação de que o HEAD demora um pouco mais a aquecer; em produção, depois do primeiro minuto, não faz diferença.
 
+## Lambdas nativas, motor da GSP e o restante do caminho de toda requisição (2026-11-28)
+
+Perfil novo da `/usuario/index`, aquecida (1 conexão, depois das rotas e das chamadas da GSP): 707 req/s, p50 de 1,3 ms e 1,5 ms de CPU por página. A folha no runtime do Groovy caiu de 49% para 36% das amostras. O que sobrava:
+
+| Origem | Amostras | Correção |
+|---|---:|---|
+| Closures passadas a interfaces funcionais (`CompletableFuture`, `Function` dos atores, `Predicate`, `ToLongFunction`, `Runnable`). Em `@CompileStatic`, `{ }` com `as Function` ou passado a um parâmetro SAM vira um proxy do JDK (`ConversionHandler`), chamado a cada requisição | ~2,4% | Lambdas nativas (`(GroxResponse r, Throwable e) -> ...`, `LambdaMetafactory`) em `HttpPipeline` (sem nenhuma closure), `NettyHttpHandler`, pools de atores dos controllers e do `grox-dsl`, `ActorPool.submit`, `Metrics`, `ControllerRouter`, `MessageSource` e `WebRequest.sessionProvider` (antes um proxy novo por requisição); `hasTarget` da segurança numa classe |
+| `GspTemplateEngine.render` dinâmico: `page.binding = ...` num `Script` passa pelo `setProperty` dele | ~1% | `render` e `GspViews.render` em `@CompileStatic` |
+| `TenantSupport.hibernateTenant`, a cada sessão aberta, dinâmico e convertendo os sentinelas a cada chamada | 1,4% | `@CompileStatic`, sentinelas calculados no `configure` |
+| `HeaderMap`: `super.get` virava `invokeMethodOnSuperN` a cada cabeçalho | ~0,8% | Classe em `@CompileStatic` |
+| `each`/`collect`/`any` com closure em `Html.attributes`, `WebRequest.buildParams`, `AccessExpression.anyGranted` e `SiteMeshLayouts.findLayout`; `link[k] = ` em `extractLinkAttrs` (`invokeMethodN`); `as Criterion[]` em `QueryRunner.whereHql`; `name in readOnly` a cada chamada transacional de service | 0,3% a 0,8% cada | Laços e chamadas diretas |
+
+A/B contra `45be1ae` (base, HEAD, HEAD, base), máquina ociosa no início (load 0,42), sem erros:
+
+| | base | HEAD |
+|---|---:|---:|
+| `/usuario/index`, req/s com 1 conexão | 749 · 725 | 950 · 920 |
+| `/usuario/index`, p50 com 1 conexão | 1,25 · 1,27 ms | 0,98 · 1,02 ms |
+| `/usuario/index`, CPU ms/req com 1 conexão | 1,22 · 1,28 | 0,93 · 0,98 |
+| `/usuario/index`, req/s com 64 conexões | 4.151 · 4.392 | 5.350 · 5.218 |
+| `/usuario/index`, CPU ms/req com 64 conexões | 1,60 · 1,54 | 1,24 · 1,28 |
+| Livros, texto, req/s com 64 conexões | 30.201 · 29.158 | 41.450 · 40.128 |
+| Livros, texto, p50 com 1 conexão | 0,29 · 0,30 ms | 0,25 · 0,25 ms |
+| Livros, GSP, req/s com 64 conexões | 7.174 · 3.202 | 8.930 · 9.597 |
+| Livros, GSP, p50 com 1 conexão | 0,58 · 0,61 ms | 0,44 · 0,44 ms |
+| Livros, JSON, req/s com 64 conexões | 14.678 · 14.110 | 16.066 · 16.740 |
+| Livros, JSON, p50 com 1 conexão | 0,48 · 0,39 ms | 0,32 · 0,33 ms |
+
+- **`/usuario/index`:** +25% de vazão e −20% a −24% de CPU por página.
+- **Texto no compat:** +37% com 64 conexões, e 0,25 ms com 1 conexão (o Grails 8 fez 0,21 ms na rodada de 2026-11-27).
+- **GSP e JSON da app de livros:** de 15% a 25% mais rápidos com 1 conexão.
+
+Uma primeira tentativa de A/B, com outro processo pesado na máquina, deu números inconsistentes (a base variou de 723 para 541 req/s entre as rodadas) e foi descartada.
+
 ## Próximos alvos (pendentes, ver [roadmap](roadmap.md#pendente-próximos-passos-fase-7))
 
 **Perfil de 2026-11-27** (depois da série de otimizações e do CSRF sem sessão): `/usuario/index` do sample-app com login e 1 conexão, 30 s de aquecimento e 30 s de medição (`bench/run-logado.sh` com JFR `settings=profile` em 20 s da janela, 1.726 amostras). Resultado: 253 req/s, p50 de 3,9 ms e 7,0 ms de CPU do processo por requisição. O perfil anterior a 2026-11-26 tinha ~13 ms de CPU por página. Por fase, cada amostra conta para o frame categorizado mais profundo da pilha. Os invólucros que cobrem a requisição inteira (`Persistence.withSession`, `SecurityContextHolder`, o proxy dos services) não contam:
@@ -383,5 +417,5 @@ Alvos, por ordem de ganho esperado:
 
 1. ~~**Rotas em `@CompileStatic` e indexadas**~~: feito (ver acima).
 2. ~~**Call sites das GSPs compiladas**~~: as chamadas geradas foram feitas (ver acima); o motor (`GspTemplateEngine.render`, `GspViews.render`) segue. Antes: ~5%, mais ~2,8% do motor. A expressão `${...}` da view é código da app e fica dinâmica. Os auxiliares que o compilador gera em volta dela (saída, escape, `invokeTag`) podem ser chamadas estáticas, como no `TraitInitTransformation`.
-3. **O restante do framework no caminho de toda requisição:** `MessageSource.format`, `HeaderMap`, `Metrics`, os auxiliares dos interceptors e do `SecurityFilter`, `TagLibRegistry.callTag` e `QueryRunner`. São 0,4% a 0,7% cada, ~5% somados.
+3. ~~**O restante do framework no caminho de toda requisição**~~ (feito em boa parte em 2026-11-28, ver acima): `MessageSource.format`, `HeaderMap`, `Metrics`, os auxiliares dos interceptors e do `SecurityFilter`, `TagLibRegistry.callTag` e `QueryRunner`. São 0,4% a 0,7% cada, ~5% somados.
 4. **Banco:** 23% das amostras com 4 consultas por página no H2 em memória. Com o filtro `_tenantId`, o Hibernate 7.4 não guarda a tradução para SQL (ver acima). Investigar se dá para manter o plano com o filtro, ou trocá-lo por uma restrição no próprio HQL gerado.

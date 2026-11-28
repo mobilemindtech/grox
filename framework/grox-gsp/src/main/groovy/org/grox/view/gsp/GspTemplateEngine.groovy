@@ -190,22 +190,25 @@ class GspTemplateEngine {
         0
     }
 
+    /** Estático: numa classe dinâmica, cada {@code page.x = ...} passava pelo {@code setProperty} do {@code Script}. */
+    @groovy.transform.CompileStatic
     void render(CompiledGsp c, Map model, GspRenderContext rc) {
         GspPage page = c.newPage()
         page.texts = c.texts
         page.viewPath = c.path
         page.markdown = c.markdown
         page.rc = rc
-        page.binding = new GspBinding(model, rc, rc.currentBinding)
+        GspBinding binding = new GspBinding(model, rc, rc.currentBinding)
+        page.setBinding(binding)
         if (c.contentType && rc.webRequest != null) rc.webRequest.response.contentType = c.contentType
         rc.pushView(c.path)
-        rc.bindings.push((GspBinding) page.binding)
+        rc.bindings.push(binding)
         try {
-            rc.bind { page.run() }
+            rc.bind { -> page.run() }
         } catch (GspException e) {
             throw e
         } catch (Throwable t) {
-            StackTraceElement el = t.stackTrace.find { it.className.startsWith(c.type.name) }
+            StackTraceElement el = t.stackTrace.find { StackTraceElement e -> e.className.startsWith(c.type.name) }
             int line = el ? gspLineOf(c.generatedSource, el.lineNumber) : 0
             throw new GspException(c.view, line, t.toString(), t)
         } finally {

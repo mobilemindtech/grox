@@ -65,7 +65,7 @@ class NettyHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         long seq = nextSeq++
         if (server != null && nextSeq - writeSeq >= server.maxPipelined) ctx.channel().config().autoRead = false
         boolean keepAlive = HttpUtil.isKeepAlive(msg)
-        boolean head = msg.method() == HttpMethod.HEAD
+        boolean head = HttpMethod.HEAD.equals(msg.method())
         if (!msg.decoderResult().success) {
             enqueue(ctx, seq, plain(HttpResponseStatus.BAD_REQUEST, 'Bad Request'), false)
             return
@@ -89,7 +89,7 @@ class NettyHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
         } catch (Throwable t) {
             future = CompletableFuture.failedFuture(t)
         }
-        future.whenComplete { GroxResponse r, Throwable e ->
+        future.whenComplete((GroxResponse r, Throwable e) -> {
             FullHttpResponse out
             if (e != null) {
                 log.error("Erro não tratado em ${msg.method()} ${msg.uri()}", e)
@@ -103,8 +103,9 @@ class NettyHttpHandler extends SimpleChannelInboundHandler<FullHttpRequest> {
                     out = plain(HttpResponseStatus.INTERNAL_SERVER_ERROR, 'Internal Server Error')
                 }
             }
-            ctx.executor().execute { enqueue(ctx, seq, out, keepAlive) }
-        }
+            FullHttpResponse resposta = out
+            ctx.executor().execute(() -> enqueue(ctx, seq, resposta, keepAlive))
+        })
     }
 
     private void enqueue(ChannelHandlerContext ctx, long seq, FullHttpResponse out, boolean keepAlive) {

@@ -32,17 +32,21 @@ class GormServiceInterceptor implements ServiceInterceptor {
         Map<String, Object> tenancy = tenantModes(type, methods)
         Map<String, Closure> result = [:]
         (transactional.keySet() + tenancy.keySet()).each { String name ->
-            Propagation propagation = transactional[name]
-            Object mode = tenancy[name]
-            result[name] = { Closure call ->
-                boolean ro = name in readOnly
-                Closure body = propagation == null ? call : { -> transaction(type, name, propagation, ro, call) }
-                mode == null ? body.call() : withTenant(mode, target, body)
-            }
+            result[name] = interceptor(type, target, name, transactional[name], name in readOnly, tenancy[name])
         }
         result
     }
 
+    /** A closure de cada chamada: estática, com o read-only resolvido uma vez (antes, {@code name in readOnly} a cada chamada). */
+    @groovy.transform.CompileStatic
+    private static Closure interceptor(Class<?> type, Object target, String name, Propagation propagation, boolean ro, Object mode) {
+        return { Closure call ->
+            Closure body = propagation == null ? call : { -> transaction(type, name, propagation, ro, call) }
+            mode == null ? body.call() : withTenant(mode, target, body)
+        }
+    }
+
+    @groovy.transform.CompileStatic
     private static Object transaction(Class<?> type, String name, Propagation propagation, boolean readOnly, Closure body) {
         if (!Persistence.available) return body.call()
         switch (propagation) {

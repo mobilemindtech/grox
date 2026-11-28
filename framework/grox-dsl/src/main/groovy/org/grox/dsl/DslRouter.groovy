@@ -91,11 +91,15 @@ class DslRouter implements Router, AutoCloseable {
     }
 
     /** Pool de atores da rota; com handler anotado, cada ator tem a sua instância da classe. */
+    @groovy.transform.CompileStatic
     static ActorPool<RouteContext> pool(Route route, int size, Closure<Object> newInstance) {
-        new ActorPool<RouteContext>(size, { ->
-            Object instance = route.closure != null ? route.instance : newInstance.call()
-            ({ RouteContext ctx -> run(route, instance, ctx) } as Function<RouteContext, Object>)
-        } as java.util.function.Supplier<Function<RouteContext, Object>>)
+        new ActorPool<RouteContext>(size, () -> handler(route, route.closure != null ? route.instance : newInstance.call()))
+    }
+
+    /** Lambda nativa: uma closure com {@code as Function} vira um proxy do JDK, chamado a cada mensagem. */
+    @groovy.transform.CompileStatic
+    private static Function<RouteContext, Object> handler(Route route, Object instance) {
+        (RouteContext ctx) -> (Object) DslRouter.run(route, instance, ctx)
     }
 
     @Override

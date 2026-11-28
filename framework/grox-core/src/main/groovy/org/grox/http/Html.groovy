@@ -56,11 +56,15 @@ class Html {
     /** Atributos HTML ({@code k="v"}); null é omitido, true vira atributo booleano. */
     static String attributes(Map attrs) {
         StringBuilder sb = new StringBuilder()
-        attrs?.each { k, v ->
+        if (attrs == null) return ''
+        // laço, não each: a closure era chamada pelo runtime a cada atributo
+        for (Object o : attrs.entrySet()) {
+            Map.Entry e = (Map.Entry) o
+            Object v = e.value
             // instanceof: 'v == false' com String passa por reflexão (e exceção) a cada atributo
-            if (v == null || (v instanceof Boolean && !v)) return
-            sb << ' ' << k
-            if (!(v instanceof Boolean)) sb << '="' << escape(v) << '"'
+            if (v == null || (v instanceof Boolean && !((Boolean) v).booleanValue())) continue
+            sb.append((char) ' ').append(String.valueOf(e.key))
+            if (!(v instanceof Boolean)) sb.append('="').append(escape(v)).append((char) '"')
         }
         sb.toString()
     }

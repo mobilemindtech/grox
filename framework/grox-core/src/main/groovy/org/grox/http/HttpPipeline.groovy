@@ -58,11 +58,12 @@ class HttpPipeline implements RequestDispatcher, AutoCloseable {
             // exceção síncrona (fora do future): ainda passa pelo end das métricas e pelo access log
             routed = CompletableFuture.failedFuture(t)
         }
-        routed.thenCompose { GroxResponse r -> commitSession(req, r) }.thenApply { GroxResponse r -> withSecurityHeaders(r) }.whenComplete { GroxResponse r, Throwable e ->
+        // lambdas nativas: uma closure passada a uma interface funcional vira um proxy do JDK (ConversionHandler)
+        routed.thenCompose((GroxResponse r) -> commitSession(req, r)).thenApply((GroxResponse r) -> withSecurityHeaders(r)).whenComplete((GroxResponse r, Throwable e) -> {
             String key = routeKey(req)
             management?.metrics?.end(req, r, e, start, key)
             accessLog?.log(req, r, e, start, key)
-        }
+        })
     }
 
     /** Pluga um roteador; com mais de um, eles são consultados na ordem em que entraram. */
@@ -118,7 +119,7 @@ class HttpPipeline implements RequestDispatcher, AutoCloseable {
                 return CompletableFuture.failedFuture(t)
             }
         }
-        CompletableFuture.supplyAsync({
+        CompletableFuture.supplyAsync(() -> {
             rs.commit(r)
             r
         }, blocking)
@@ -133,15 +134,15 @@ class HttpPipeline implements RequestDispatcher, AutoCloseable {
             ResourceHandler resource = resourceFor(req)
             if (filter.bypasses(req, resource)) return proceed(req)
             // filtro fora do event loop (sessão/Redis, GORM, bcrypt)
-            return CompletableFuture.supplyAsync({ ->
+            return CompletableFuture.supplyAsync(() -> {
                 boolean special = resource != null || endpointFor(req.path) != null
                 RouteMatch m = special ? null : router?.match(req)
                 if (m != null) req.setAttribute(ROUTE_ATTR, m)
                 filter.process(req, m)
-            }, blocking).handle { GroxResponse r, Throwable e ->
+            }, blocking).handle((GroxResponse r, Throwable e) -> {
                 if (e != null) return error(req, 500, unwrap(e))
                 r == null ? proceed(req) : respond(req, r)
-            }.thenCompose { it }
+            }).thenCompose((CompletableFuture<GroxResponse> f) -> f)
         } catch (Throwable t) {
             return error(req, 500, t)
         }
@@ -164,9 +165,8 @@ class HttpPipeline implements RequestDispatcher, AutoCloseable {
 
     /** Resposta de uma etapa: exceção vira 500 e {@code errorStatus}, a página de erro. */
     CompletableFuture<GroxResponse> finish(GroxRequest req, CompletableFuture<GroxResponse> future) {
-        future.handle { GroxResponse r, Throwable e ->
-            e != null ? error(req, 500, unwrap(e)) : respond(req, r)
-        }.thenCompose { it }
+        future.handle((GroxResponse r, Throwable e) -> e != null ? error(req, 500, unwrap(e)) : respond(req, r))
+                .thenCompose((CompletableFuture<GroxResponse> f) -> f)
     }
 
     private CompletableFuture<GroxResponse> respond(GroxRequest req, GroxResponse r) {
@@ -176,13 +176,13 @@ class HttpPipeline implements RequestDispatcher, AutoCloseable {
     /** Endpoint especial (management, console), fora do event loop. */
     private CompletableFuture<GroxResponse> runEndpoint(GroxRequest req, Endpoint endpoint) {
         if (filter == null && !endpoint.allowedWithoutSecurity(req)) return error(req, 403, null)
-        finish(req, CompletableFuture.supplyAsync({ -> endpoint.handle(req) }, blocking))
+        finish(req, CompletableFuture.supplyAsync(() -> endpoint.handle(req), blocking))
     }
 
     private CompletableFuture<GroxResponse> serve(GroxRequest req, ResourceHandler resource) {
-        CompletableFuture.supplyAsync({ resource.serve(req) }, blocking).handle { GroxResponse r, Throwable e ->
+        CompletableFuture.supplyAsync(() -> resource.serve(req), blocking).handle((GroxResponse r, Throwable e) ->
             e != null ? error(req, 500, unwrap(e)) : (r != null ? CompletableFuture.completedFuture(r) : error(req, 404, null))
-        }.thenCompose { it }
+        ).thenCompose((CompletableFuture<GroxResponse> f) -> f)
     }
 
     /** Rejeita caminhos com segmentos {@code .}/{@code ..} (evita contornar as regras de URL). */

@@ -10,9 +10,10 @@ import org.grox.core.Conversions
 class GroxParams extends grails.web.servlet.mvc.GrailsParameterMap {
 
     @Override
+    @groovy.transform.CompileStatic
     Object get(Object key) {
         if (containsKey(key)) return super.get(key)
-        String prefix = "${key}."
+        String prefix = String.valueOf(key) + '.'
         GroxParams nested = null
         for (Map.Entry<String, Object> e : entrySet()) {
             if (e.key.startsWith(prefix)) {

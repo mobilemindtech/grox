@@ -73,6 +73,7 @@ class SiteMeshLayouts {
         v.is(NO_LAYOUT) ? null : v
     }
 
+    @groovy.transform.CompileStatic
     String findLayout(Content content, ViewRequest wr) {
         List<String> candidates = []
         String meta = property(content, 'meta.layout')
@@ -87,7 +88,11 @@ class SiteMeshLayouts {
             }
             if (defaultLayout) candidates << defaultLayout
         }
-        candidates.collect { "/layouts/${it}".toString() }.find { views.engine.find(it) != null }
+        for (String c : candidates) {
+            String path = '/layouts/' + c
+            if (views.engine.find(path) != null) return path
+        }
+        null
     }
 
     static ContentProperty node(Content content, String path) {
@@ -128,11 +133,15 @@ class SiteMeshLayouts {
 
         @Override
         protected void decorate(String decoratorPath, Content content, Writer out) {
-            def engine = layouts.views.engine
-            def layout = engine.find(decoratorPath)
+            renderLayout(layouts.views.engine, decoratorPath, content, out)
+        }
+
+        @groovy.transform.CompileStatic
+        private void renderLayout(org.grox.view.gsp.GspTemplateEngine engine, String decoratorPath, Content content, Writer out) {
+            org.grox.view.gsp.GspTemplateEngine.CompiledGsp layout = engine.find(decoratorPath)
             if (layout == null) return
-            rc.withLayoutContent(content) {
-                out.write(rc.capture { engine.render(layout, model, rc) }.toString())
+            rc.withLayoutContent(content) { ->
+                out.write(rc.capture { -> engine.render(layout, model, rc) }.toString())
             }
         }
     }

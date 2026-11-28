@@ -147,6 +147,9 @@ Mapeie o MIME em `Formats.MIME_TO_FORMAT` e `FORMAT_TO_MIME`, e trate o formato 
 | `respond(Map, Object)` e `respond(Object, Map)` ambíguos com dois mapas | Use um único método com `(Object, Object)` |
 | Aspas simples dentro de `'...'` | O parser acusa "Missing ')'" em outra linha. Use `'''...'''` |
 | `switch` com `->` como última instrução | Use `return switch (...) {}` explicitamente |
+| No JFR, `jdk.proxyN.$ProxyNN.apply`/`test`/`accept` com `ConversionHandler.invoke`, mesmo em código `@CompileStatic` | Uma closure com `as Function` ou passada a um parâmetro de interface funcional (`CompletableFuture.handle { }`, `computeIfAbsent { }`) vira um proxy do JDK, e cada chamada passa pela closure via `ClosureMetaClass`. No caminho quente, use lambda nativa em código `@CompileStatic`: `(GroxResponse r, Throwable e) -> ...` |
+| `x = ...` numa variável de um `Script` (como o `GspPage`) lento em código dinâmico | A atribuição passa pelo `setProperty` do `Script`. Chame o setter (`page.setBinding(b)`) de um método `@CompileStatic` |
+| `@CompileStatic` e mesmo assim `ScriptBytecodeAdapter` no bytecode | `super.metodo()` numa classe dinâmica (`invokeMethodOnSuperN`), `==` entre `Object`s (`compareEqual`), `map[k] = v` em alguns casos (`invokeMethodN`), `def (a, b) = lista` e `as Tipo[]`. Confira com `javap -c` e troque por `equals`, `put`, laços e chamadas diretas |
 | Jars compilados com Groovy ≤ 5 (Grails, GORM) | `NoClassDefFoundError: org/codehaus/groovy/runtime/callsite/CallSite`. O call site caching foi removido no Groovy 6 |
 | `groovy.typecheckers.SqlChecker` | No 6.0.0 se chama `SqlInjectionChecker` |
 | Coerção `obj as Classe` para POGO | Não chama o construtor. `as JSON` funciona pelo extension module `JsonConversions` |

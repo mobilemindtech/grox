@@ -42,6 +42,7 @@ class GroxResponse implements jakarta.servlet.http.HttpServletResponse {
     private PrintWriter writer
     private boolean writerClosed
 
+    @groovy.transform.CompileStatic
     void setHeader(String name, Object value) {
         headers.set(name, value?.toString())
     }
