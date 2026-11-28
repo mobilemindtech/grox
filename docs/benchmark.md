@@ -310,6 +310,28 @@ jfr print --events jdk.JavaExceptionThrow --stack-depth 20 /tmp/p.jfr
 jfr print --events jdk.ExecutionSample --stack-depth 200 /tmp/p.jfr
 ```
 
+## Rotas sem runtime do Groovy e indexadas (2026-11-27)
+
+O perfil de 2026-11-27 (abaixo) pôs `UrlMappingsHolder.reverse`, `UrlMapping.reverse` e `LinkGenerator.link` em ~6% das amostras da `/usuario/index`, a maior parte no runtime do Groovy, embora as três classes já fossem `@CompileStatic`. O que ainda passava pelo runtime:
+
+| Origem | Correção |
+|---|---|
+| `def (String path, Set used) = holder.reverse(...)`: a atribuição múltipla chama `getAt` dinâmico | O `reverse` devolve um `Reverso` (caminho e parâmetros usados) |
+| `p == '**'` entre `Object` e `String` (`ScriptBytecodeAdapter.compareEqual`) e `==` entre Strings | `equals` |
+| `fixed.any { }`, `params.findAll { }`, `collect { }.join()`: closures chamadas pelo runtime | Laços com `StringBuilder` |
+| Verdade do Groovy em `Object` (`if (m.attrs.redirect)`, `if (url)`) a cada mapeamento | Teste explícito, ou calculado uma vez na construção |
+| Busca linear em todos os mapeamentos, a cada link e a cada requisição | Índice do `reverse` pelo `controller:` do mapeamento (mais os que têm `$controller`) e do `match` pelo primeiro segmento literal do caminho (mais os que começam com variável), na mesma ordem de prioridade |
+
+A/B alternado (base `6a545be`, HEAD, HEAD, base), `/usuario/index` com login, 30 s de aquecimento e 20 s de medição:
+
+| | base | HEAD |
+|---|---:|---:|
+| req/s com 64 conexões | 3.011 · 3.140 | 3.679 · 3.829 |
+| CPU ms/req com 64 conexões | 2,00 · 1,92 | 1,69 · 1,67 |
+| p50 com 1 conexão | 5,35 · 5,03 ms | 5,35 · 5,10 ms |
+
+Com 64 conexões, +20% de vazão e −14% de CPU por requisição. Com 1 conexão, a diferença ficou dentro do ruído. A página tem uma tabela com um `g:link` por linha mais a paginação, e o sample-app tem poucos mapeamentos; uma app com centenas de mapeamentos ganha mais com os índices.
+
 ## Próximos alvos (pendentes, ver [roadmap](roadmap.md#pendente-próximos-passos-fase-7))
 
 **Perfil de 2026-11-27** (depois da série de otimizações e do CSRF sem sessão): `/usuario/index` do sample-app com login e 1 conexão, 30 s de aquecimento e 30 s de medição (`bench/run-logado.sh` com JFR `settings=profile` em 20 s da janela, 1.726 amostras). Resultado: 253 req/s, p50 de 3,9 ms e 7,0 ms de CPU do processo por requisição. O perfil anterior a 2026-11-26 tinha ~13 ms de CPU por página. Por fase, cada amostra conta para o frame categorizado mais profundo da pilha. Os invólucros que cobrem a requisição inteira (`Persistence.withSession`, `SecurityContextHolder`, o proxy dos services) não contam:
@@ -337,7 +359,7 @@ jfr print --events jdk.ExecutionSample --stack-depth 200 /tmp/p.jfr
 
 Alvos, por ordem de ganho esperado:
 
-1. **Rotas em `@CompileStatic` e indexadas** (`UrlMappingsHolder`, `UrlMapping`, `LinkGenerator`): ~3% em despacho dinâmico mais a busca linear; o índice por primeiro segmento literal já estava no roadmap.
+1. ~~**Rotas em `@CompileStatic` e indexadas**~~: feito (ver acima).
 2. **Call sites das GSPs compiladas:** ~5%, mais ~2,8% do motor. A expressão `${...}` da view é código da app e fica dinâmica. Os auxiliares que o compilador gera em volta dela (saída, escape, `invokeTag`) podem ser chamadas estáticas, como no `TraitInitTransformation`.
 3. **O restante do framework no caminho de toda requisição:** `MessageSource.format`, `HeaderMap`, `Metrics`, os auxiliares dos interceptors e do `SecurityFilter`, `TagLibRegistry.callTag` e `QueryRunner`. São 0,4% a 0,7% cada, ~5% somados.
 4. **Banco:** 23% das amostras com 4 consultas por página no H2 em memória. Com o filtro `_tenantId`, o Hibernate 7.4 não guarda a tradução para SQL (ver acima). Investigar se dá para manter o plano com o filtro, ou trocá-lo por uma restrição no próprio HQL gerado.

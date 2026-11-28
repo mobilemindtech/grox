@@ -115,10 +115,10 @@ class UrlMapping {
         if (regex == null) return null
         Matcher mt = regex.matcher(path)
         if (!mt.matches()) return null
-        Map<String, String> vars = [:]
+        Map<String, String> vars = new LinkedHashMap<>()
         for (int i = 0; i < varNames.size(); i++) {
             String g = mt.group(i + 1)
-            if (g != null) vars[varNames[i]] = g
+            if (g != null) vars.put(varNames.get(i), g)
         }
         if (!constraints.isEmpty()) {
             Map<String, Pattern> patterns = constraintPatterns
@@ -131,7 +131,7 @@ class UrlMapping {
                 constraintPatterns = patterns
             }
             for (Map.Entry<String, Pattern> p : patterns.entrySet()) {
-                String value = vars[p.key]
+                String value = vars.get(p.key)
                 if (value != null && !p.value.matcher(value).matches()) return null
             }
         }
@@ -146,28 +146,55 @@ class UrlMapping {
         for (List<Object> parts : segments) {
             StringBuilder seg = new StringBuilder()
             for (Object p : parts) {
-                if (p == '**' || p == '*') return null
                 if (p instanceof Var) {
                     Var v = (Var) p
-                    Object value = values[v.name]
-                    if (value == null || value.toString().empty) {
+                    Object value = values.get(v.name)
+                    if (value == null || value.toString().isEmpty()) {
                         if (v.optional) break outer
                         return null
                     }
                     // curinga (**) aceita barras: codifica segmento por segmento
-                    seg << (v.wildcard ? value.toString().split('/', -1).collect { encode(it) }.join('/') : encode(value.toString()))
-                    used << v.name
+                    if (v.wildcard) {
+                        String[] partes = value.toString().split('/', -1)
+                        for (int i = 0; i < partes.length; i++) {
+                            if (i > 0) seg.append((char) '/')
+                            seg.append(encode(partes[i]))
+                        }
+                    } else {
+                        seg.append(encode(value.toString()))
+                    }
+                    used.add(v.name)
                 } else {
-                    seg << p
+                    String literal = (String) p
+                    if ('**'.equals(literal) || '*'.equals(literal)) return null
+                    seg.append(literal)
                 }
             }
-            sb << '/' << seg
+            sb.append((char) '/').append(seg)
         }
-        if (formatVar && values[formatVar.name]) {
-            sb << '.' << encode(values[formatVar.name].toString())
-            used << formatVar.name
+        if (formatVar != null) {
+            Object format = values.get(formatVar.name)
+            if (format != null && !format.toString().isEmpty()) {
+                sb.append((char) '.').append(encode(format.toString()))
+                used.add(formatVar.name)
+            }
         }
-        sb.length() ? sb.toString() : '/'
+        sb.length() > 0 ? sb.toString() : '/'
+    }
+
+    /**
+     * O primeiro segmento, se for literal puro ({@code "/livros/$id"} → {@code livros}), para o índice do
+     * {@link UrlMappingsHolder}; null se começa com variável ou curinga, ou se é um segmento só com
+     * {@code (.$format)?} (o caminho viria como {@code livros.json}).
+     */
+    String getFirstLiteral() {
+        if (regex == null || segments.isEmpty()) return null
+        List<Object> first = segments.get(0)
+        if (first.size() != 1 || !(first.get(0) instanceof String)) return null
+        String literal = (String) first.get(0)
+        if ('*'.equals(literal) || '**'.equals(literal)) return null
+        if (segments.size() == 1 && formatVar != null) return null
+        literal
     }
 
     static String encode(String s) {

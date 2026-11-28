@@ -21,7 +21,7 @@ Cada pacote pertence a um módulo (subprojeto `framework/grox-*`; ver [modulariz
 | `org.grox.core` | `GroxRuntime` (orquestra a subida pelas fases dos módulos `GroxModule`), `GroxApplication` (configuração, ambiente e artefatos por tipo; o bean `grailsApplication` é a fachada `org.grox.web.GroxGrailsApplication`), `ArtefactType`, `Config` (YAML), `ClassScanner`, `Autowirer` (injeção por nome), `ClassUtils` |
 | `org.grox.core.reload` | Recarga em desenvolvimento: `DevReloader` (gerações, monitoramento e Gradle contínuo), `AppClasses` (retrato das classes com ASM: camadas e diferenças), `AppClassLoader`, `SwitchableDispatcher` (entrada do Netty entre gerações), `@Reloadable` |
 | `org.grox.http` | Netty (`NettyServer`, `NettyHttpHandler`), `GroxRequest`/`GroxResponse`, `GroxParams`, sessão (`GroxSession`, `SessionStore`), `FlashScope`, `StaticResources`, `RequestScope`/`CurrentRequest` (requisição corrente), `Endpoint` (endpoints especiais: management, console), `Html`/`SafeHtml` |
-| `org.grox.routing` | DSL do `UrlMappings` (`UrlMappingsBuilder`), `UrlMapping` (padrão → regex, reverse), `UrlMappingsHolder` (match e reverse), `LinkGenerator`, `RouteTarget` (destino de rota; o `ControllerArtefact` é um) |
+| `org.grox.routing` | DSL do `UrlMappings` (`UrlMappingsBuilder`), `UrlMapping` (padrão → regex, reverse), `UrlMappingsHolder` (match e reverse, com índices pelo primeiro segmento literal do caminho e pelo `controller:` do mapeamento), `LinkGenerator`, `RouteTarget` (destino de rota; o `ControllerArtefact` é um) |
 | `org.grox.web` | `WebDispatcher` (roteador), `ControllerArtefact`, dispatchers de atores, `ControllerExecutor`, `ControllerSupport` (render/redirect/respond/withFormat), `CustomEditors`, `Formats`, `WebRequest`, `RequestContext` |
 | `org.grox.web.api` | Traits injetados por AST: `ControllerApi`, `ServiceApi` |
 | `org.grox.web.json` | `JsonSupport` e o extension module `obj as JSON` |
@@ -78,6 +78,7 @@ Cada pacote pertence a um módulo (subprojeto `framework/grox-*`; ver [modulariz
 
 Pontos importantes:
 - **O roteador não é um ator.** Resolver a rota é uma função pura sobre dados imutáveis, e um ator único serializaria todo o tráfego.
+- **Índices das rotas:** o `match` só testa os mapeamentos cujo primeiro segmento literal é o do caminho, mais os que começam com variável. O `reverse` (links) só testa os do `controller:` pedido, mais os que têm `$controller`. Os dois preservam a ordem de prioridade dos mapeamentos, então o resultado é o mesmo da busca linear.
 - **As respostas saem na ordem das requisições.** O `NettyHttpHandler` numera as requisições de cada conexão e segura as respostas até poder escrevê-las em ordem.
 - **Os erros viram novo despacho.** `sendError(404)` ou uma exceção fazem o `WebDispatcher` procurar o mapeamento `"404"`/`"500"`. Se ele aponta para um controller, a requisição é redespachada para ele. Senão, sai a página de erro padrão (HTML ou JSON, conforme o `Accept`), com stack trace em desenvolvimento.
 

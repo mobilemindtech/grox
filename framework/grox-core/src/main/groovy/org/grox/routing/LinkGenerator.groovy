@@ -17,32 +17,52 @@ class LinkGenerator {
     }
 
     String link(Map attrs, String currentController = null) {
-        if (attrs.url instanceof Map) return link((Map) attrs.url, currentController)
-        if (attrs.url) return attrs.url.toString()
-        String base = attrs.base?.toString() ?: (attrs.absolute ? (serverURL ?: '') : '')
-        String fragment = attrs.fragment ? "#${attrs.fragment}" : ''
-        if (attrs.uri) return base + attrs.uri + fragment
+        Object url = attrs.get('url')
+        if (url instanceof Map) return link((Map) url, currentController)
+        if (url != null && !url.toString().isEmpty()) return url.toString()
+        Object b = attrs.get('base')
+        String base = b != null && !b.toString().isEmpty() ? b.toString() : (attrs.get('absolute') ? (serverURL ?: '') : '')
+        Object f = attrs.get('fragment')
+        String fragment = f != null && !f.toString().isEmpty() ? '#' + f : ''
+        Object uri = attrs.get('uri')
+        if (uri != null && !uri.toString().isEmpty()) return base + uri + fragment
 
-        String controller = (attrs.controller ?: currentController)?.toString()
-        String action = attrs.action?.toString()
-        Map<String, Object> params = [:]
-        if (attrs.params instanceof Map) params.putAll((Map) attrs.params)
-        if (attrs.id != null) params.id = attrs.id
+        Object c = attrs.get('controller')
+        String controller = c != null && !c.toString().isEmpty() ? c.toString() : currentController
+        Object a = attrs.get('action')
+        String action = a?.toString()
+        Map<String, Object> params = new LinkedHashMap<>()
+        Object p = attrs.get('params')
+        if (p instanceof Map) params.putAll((Map<String, Object>) p)
+        if (attrs.get('id') != null) params.put('id', attrs.get('id'))
         // resource: 'livro' ou uma instância (controller pelo nome da classe e id da instância), como no Grails
-        Object resource = attrs.resource
+        Object resource = attrs.get('resource')
         if (resource instanceof CharSequence) {
             controller = resource.toString()
         } else if (resource != null) {
             controller = ClassUtils.propertyName(resource.getClass())
-            if (params.id == null) params.id = resource.hasProperty('id') ? org.codehaus.groovy.runtime.InvokerHelper.getProperty(resource, 'id') : null
-            if (action == null && params.id != null) action = 'show'
+            if (params.get('id') == null) params.put('id', resource.hasProperty('id') ? org.codehaus.groovy.runtime.InvokerHelper.getProperty(resource, 'id') : null)
+            if (action == null && params.get('id') != null) action = 'show'
         }
 
-        def (String path, Set<String> used) = holder.reverse(controller, action, params, controllers[controller]?.defaultAction)
-        Map query = params.findAll { k, v -> !(k in used) && v != null }
-        String qs = query.collect { k, v ->
-            (v instanceof Collection ? v : [v]).collect { "${UrlMapping.encode(k.toString())}=${UrlMapping.encode(it.toString())}" }.join('&')
-        }.join('&')
-        base + path + (qs ? "?$qs" : '') + fragment
+        RouteTarget alvo = controller != null ? controllers.get(controller) : null
+        UrlMappingsHolder.Reverso r = holder.reverse(controller, action, params, alvo?.defaultAction)
+        StringBuilder sb = new StringBuilder(base).append(r.path)
+        boolean primeiro = true
+        for (Map.Entry<String, Object> e : params.entrySet()) {
+            Object v = e.value
+            if (v == null || r.used.contains(e.key)) continue
+            String k = UrlMapping.encode(String.valueOf(e.key))
+            if (v instanceof Collection) {
+                for (Object item : (Collection) v) {
+                    sb.append(primeiro ? (char) '?' : (char) '&').append(k).append((char) '=').append(UrlMapping.encode(String.valueOf(item)))
+                    primeiro = false
+                }
+            } else {
+                sb.append(primeiro ? (char) '?' : (char) '&').append(k).append((char) '=').append(UrlMapping.encode(v.toString()))
+                primeiro = false
+            }
+        }
+        sb.append(fragment).toString()
     }
 }

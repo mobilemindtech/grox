@@ -10,12 +10,54 @@ class UrlMappingsHolder {
 
     final List<UrlMapping> mappings
     final Map<Integer, UrlMapping> errorMappings
+    /**
+     * Índice do {@link #match}: pelo primeiro segmento do caminho, os mapeamentos que começam com esse literal mais
+     * os que não começam com literal, na ordem de {@link #mappings}. Caminho com outro primeiro segmento: só
+     * {@link #semLiteral}.
+     */
+    private final Map<String, List<UrlMapping>> porPrimeiroSegmento = new HashMap<>()
+    private final List<UrlMapping> semLiteral = []
+    /** Índice do {@link #reverse}: por {@code controller:} fixo (null nos que não fixam), sem os de redirect. */
+    private final Map<String, List<UrlMapping>> porController = new HashMap<>()
+    /** Os que têm {@code $controller} no caminho (o reverso genérico). */
+    private final List<UrlMapping> comVarController = []
 
     UrlMappingsHolder(List<UrlMapping> all) {
         errorMappings = all.findAll { it.statusCode != null }.collectEntries { [(it.statusCode): it] }
         mappings = all.findAll { it.statusCode == null }.toSorted { UrlMapping a, UrlMapping b ->
             b.literalWeight <=> a.literalWeight ?: a.varNames.size() <=> b.varNames.size() ?: a.order <=> b.order
         }
+        Set<String> literais = new HashSet<>()
+        for (UrlMapping m : mappings) {
+            String l = m.firstLiteral
+            if (l != null) literais.add(l)
+        }
+        for (String l : literais) porPrimeiroSegmento.put(l, new ArrayList<UrlMapping>())
+        for (UrlMapping m : mappings) {
+            String l = m.firstLiteral
+            if (l != null) {
+                porPrimeiroSegmento.get(l).add(m)
+            } else {
+                semLiteral.add(m)
+                for (List<UrlMapping> lista : porPrimeiroSegmento.values()) lista.add(m)
+            }
+            if (!m.attrs.get('redirect')) {
+                Object c = m.attrs.get('controller')
+                String chave = c?.toString()
+                List<UrlMapping> lista = porController.get(chave)
+                if (lista == null) porController.put(chave, lista = new ArrayList<UrlMapping>())
+                lista.add(m)
+            }
+            if (m.varNames.contains('controller')) comVarController.add(m)
+        }
+    }
+
+    /** Os mapeamentos que podem casar o caminho, na ordem de {@link #mappings}. */
+    private List<UrlMapping> candidatos(String path) {
+        if (porPrimeiroSegmento.isEmpty() || path.length() < 2 || path.charAt(0) != (char) '/') return semLiteral
+        int fim = path.indexOf('/', 1)
+        List<UrlMapping> lista = porPrimeiroSegmento.get(fim < 0 ? path.substring(1) : path.substring(1, fim))
+        lista != null ? lista : semLiteral
     }
 
     static UrlMappingsHolder build(List<Class<?>> urlMappingsClasses) {
@@ -44,7 +86,7 @@ class UrlMappingsHolder {
     RouteMatch match(String path, String method, Map<String, ? extends RouteTarget> controllers) {
         String verb = method == 'HEAD' ? 'GET' : method
         boolean methodMismatch = false
-        for (UrlMapping m : mappings) {
+        for (UrlMapping m : candidatos(path)) {
             Map<String, String> vars = m.match(path)
             if (vars == null) continue
             boolean verbOk = !m.httpMethod || m.httpMethod == verb
@@ -91,42 +133,67 @@ class UrlMappingsHolder {
         errorMappings[status]
     }
 
+    /** Caminho gerado pelo {@link #reverse} e os parâmetros que ele consumiu (o resto vai na query string). */
+    static final class Reverso {
+        final String path
+        final Set<String> used
+
+        Reverso(String path, Set<String> used) {
+            this.path = path
+            this.used = used
+        }
+    }
+
     /**
      * Caminho para controller/action. Prefere mapeamentos estáticos
      * ({@code "/usuarios/$id"(controller: 'usuario', action: 'show')}), depois os
      * dinâmicos ({@code /$controller/$action}).
-     * @return [caminho, nomes de parâmetros consumidos pelo caminho]
      */
-    List reverse(String controller, String action, Map<String, Object> params, String defaultAction) {
+    Reverso reverse(String controller, String action, Map<String, Object> params, String defaultAction) {
         String effectiveAction = action ?: defaultAction
         Map<String, Object> values = new LinkedHashMap<>(params)
-        values.controller = controller
-        if (action || params.id != null) values.action = effectiveAction
+        values.put('controller', controller)
+        if ((action != null && !action.isEmpty()) || params.get('id') != null) values.put('action', effectiveAction)
 
-        for (UrlMapping m : mappings) {
-            if (m.attrs.redirect || m.attrs.controller?.toString() != controller) continue
-            // mapeamentos que fixam parâmetros (ex. format: 'json') só servem se o link pedir o mesmo valor
-            Map fixed = (Map) m.attrs.params
-            if (fixed && fixed.any { k, v -> params[k]?.toString() != v?.toString() }) continue
-            Object a = m.attrs.action
-            boolean ok
-            if (a instanceof Map) ok = effectiveAction in ((Map) a).values()*.toString()
-            else if (a != null) ok = a.toString() == effectiveAction
-            else ok = m.varNames.contains('action') || !action || action == defaultAction
-            if (!ok) continue
-            Set<String> used = [] as Set
-            String url = m.reverse(values, used)
-            if (url) return [url, used]
+        List<UrlMapping> estaticos = porController.get(controller)
+        if (estaticos != null) {
+            for (UrlMapping m : estaticos) {
+                if (!aceita(m, params, action, effectiveAction, defaultAction)) continue
+                Set<String> used = new HashSet<>()
+                String url = m.reverse(values, used)
+                if (url != null && !url.isEmpty()) return new Reverso(url, used)
+            }
         }
-        for (UrlMapping m : mappings) {
-            if (!m.varNames.contains('controller')) continue
-            Set<String> used = [] as Set
+        for (UrlMapping m : comVarController) {
+            Set<String> used = new HashSet<>()
             String url = m.reverse(values, used)
-            if (url) return [url, used]
+            if (url != null && !url.isEmpty()) return new Reverso(url, used)
         }
-        Set<String> used = ['id'] as Set
-        String url = "/${UrlMapping.encode(controller.toString())}" + (values.action ? "/${UrlMapping.encode(values.action.toString())}" : '') +
-                (params.id != null ? "/${UrlMapping.encode(params.id.toString())}" : '')
-        [url, used]
+        StringBuilder url = new StringBuilder('/').append(UrlMapping.encode(String.valueOf(controller)))
+        Object a = values.get('action')
+        if (a != null && !a.toString().isEmpty()) url.append((char) '/').append(UrlMapping.encode(a.toString()))
+        Object id = params.get('id')
+        if (id != null) url.append((char) '/').append(UrlMapping.encode(id.toString()))
+        new Reverso(url.toString(), Collections.singleton('id'))
+    }
+
+    /** O mapeamento estático serve para o link: mesmos parâmetros fixos e a action pedida. */
+    private static boolean aceita(UrlMapping m, Map<String, Object> params, String action, String effectiveAction, String defaultAction) {
+        // mapeamentos que fixam parâmetros (ex. format: 'json') só servem se o link pedir o mesmo valor
+        Object fixos = m.attrs.get('params')
+        if (fixos instanceof Map) {
+            for (Map.Entry e : ((Map) fixos).entrySet()) {
+                if (!String.valueOf(params.get(e.key)).equals(String.valueOf(e.value))) return false
+            }
+        }
+        Object a = m.attrs.get('action')
+        if (a instanceof Map) {
+            for (Object v : ((Map) a).values()) {
+                if (String.valueOf(v).equals(effectiveAction)) return true
+            }
+            return false
+        }
+        if (a != null) return a.toString().equals(effectiveAction)
+        m.varNames.contains('action') || action == null || action.isEmpty() || Objects.equals(action, defaultAction)
     }
 }

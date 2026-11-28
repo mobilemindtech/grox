@@ -172,4 +172,38 @@ class UrlMappingsTest {
         assert holder.match('/livro', 'POST', destinos).actionName == 'save'
         assert holder.match('/livros/5', 'HEAD', destinos).actionName == 'show'
     }
+
+    @Test
+    void 'indice por primeiro segmento preserva a ordem entre literais e genericos'() {
+        Closure mappings = {
+            "/$lang/sobre"(controller: 'pagina', action: 'sobre')      // genérico, mais literal: vem antes de /x/$id
+            "/x/$id"(controller: 'x', action: 'show')
+            "/livros(.$format)?"(controller: 'livro', action: 'index')  // um segmento com formato: fora do índice
+            "/"(controller: 'pagina', action: 'home')
+            "/$controller/$action?/$id?"()
+        }
+        def builder = new UrlMappingsBuilder()
+        mappings.delegate = builder
+        mappings.resolveStrategy = Closure.DELEGATE_FIRST
+        mappings.call()
+        def holder = new UrlMappingsHolder(builder.mappings)
+        def destinos = [pagina: new Destino(defaultAction: 'home', acoes: ['home', 'sobre'] as Set),
+                        x     : new Destino(defaultAction: 'show', acoes: ['show', 'lista'] as Set),
+                        livro : new Destino(defaultAction: 'index', acoes: ['index'] as Set)]
+        def r = holder.match('/x/sobre', 'GET', destinos)
+        assert r.controller.is(destinos.pagina) && r.params.lang == 'x'
+        assert holder.match('/x/5', 'GET', destinos).params == [id: '5']
+        assert holder.match('/x/lista/2', 'GET', destinos).actionName == 'lista'   // literal x sem mapeamento de 3 segmentos: o genérico
+        assert holder.match('/livros.json', 'GET', destinos).params.format == 'json'
+        assert holder.match('/livros', 'GET', destinos).actionName == 'index'
+        assert holder.match('/', 'GET', destinos).actionName == 'home'
+        assert holder.match('/pt/sobre', 'GET', destinos).params.lang == 'pt'
+        assert holder.match('/nada/aqui', 'GET', destinos) == null
+        // reverso pelo índice por controller, com o genérico de reserva
+        def links = new org.grox.routing.LinkGenerator(holder, destinos, null)
+        assert links.link(controller: 'x', action: 'show', id: 3) == '/x/3'
+        assert links.link(controller: 'livro', action: 'index', params: [format: 'json', q: ['a b', 'c']]) == '/livros.json?q=a%20b&q=c'
+        assert links.link(controller: 'x', action: 'lista', params: [p: 1], fragment: 'topo') == '/x/lista?p=1#topo'
+        assert links.link(controller: 'outro') == '/outro'
+    }
 }
