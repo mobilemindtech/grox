@@ -183,7 +183,7 @@ O runtime expõe os módulos com `runtime.module(GormModule)`; por compatibilida
        GspTemplateEngine.find(path)            cache; reload se o arquivo mudou (dev)
          ViewLocator: grails-app/views (dev) ou classpath views/
          GspParser  → nós (texto, ${}, <% %>, <%@ %>, <ns:tag>)
-         GspCompiler → script Groovy (base GspPage), linhas marcadas //@gsp:N
+         GspCompiler → script Groovy (base GspPage), linhas marcadas //@gsp:N; GspDirectCalls liga as chamadas geradas
          GroovyClassLoader → classe
        GspPage.run() com GspBinding (modelo + implícitos) dentro de GspRenderContext
        se text/html: SiteMeshLayouts.decorate()
@@ -197,7 +197,7 @@ O runtime expõe os módulos com `runtime.module(GormModule)`; por compatibilida
 - `SafeHtml`: o `raw(x)`, a saída de tags e `encodeAsRaw()`;
 - o texto literal da página.
 
-**Tags de sintaxe:** `g:if`, `g:elseif`, `g:else`, `g:unless`, `g:while`, `g:each` e `g:set` são compiladas como estruturas de controle Groovy, não como chamadas de tag. As demais tags viram `invokeTag(ns, nome, attrs, corpo)`.
+**Tags de sintaxe:** `g:if`, `g:elseif`, `g:else`, `g:unless`, `g:while`, `g:each` e `g:set` são compiladas como estruturas de controle Groovy, não como chamadas de tag. As demais tags viram `GspPage.__tag(this, ns, nome, attrs, corpo)`. Texto, `${...}` e `g:set` também viram chamadas estáticas (`__text`, `__expr`, `__set`, `__capture`), que o `GspDirectCalls` (customizador da compilação) liga com `invokestatic`: dentro do corpo de uma tag, que é uma closure, uma chamada sem receptor passaria pela resolução owner/delegate da closure a cada vez. As expressões do usuário continuam dinâmicas.
 
 ## Decisões registradas
 

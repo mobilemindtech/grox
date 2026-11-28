@@ -17,6 +17,7 @@ bench/resumo.py rodada.log      # tabelas em Markdown para colar abaixo
 - **O que a rodada mede:** a app de livros (`bench/livros`) no Grails 8, no Grox compat e no Grox puro (`sample-plain`), em texto, GSP com layout e JSON. São duas ordens intercaladas (ida e volta), com 64 conexões (20 s de aquecimento, 10 s de medição) e depois com 1 conexão. Depois, a `/usuario/index` do sample-app com login (4 consultas, tags, layout), com 1 e 64 conexões e o tempo de CPU por requisição. Com `BASE`, a versão de comparação entra intercalada com o HEAD em todas as medições.
 - **Sempre em A/B:** a máquina e o JDK mudam entre rodadas, e os números absolutos de datas diferentes não se comparam. Por isso cada rodada mede também a anterior (ou o commit suspeito) nas mesmas condições.
 - **O que conta como regressão:** o HEAD pior que a base nas duas ordens. Na prática, mais de 10% no p50 com 1 conexão (a métrica mais estável) ou mais de 15% em req/s com 64 conexões, que oscila mais. Se aparecer, abra um perfil com JFR (ver [benchmark.md](benchmark.md#o-que-o-profiling-mostrou-jfr)) antes de concluir.
+- **Aquecimento:** o `run-logado.sh` aquece a página com 64 conexões (`JIT=60` s) antes de medir. Até 2026-11-27, ele media com 1 conexão logo depois de 30 s de aquecimento com 1 conexão, e o JIT ainda estava compilando. Nessa condição, o p50 da `/usuario/index` dava de 5 a 6 ms; aquecida, a mesma página fica em ~2 ms.
 - **Quando rodar:** antes de fechar uma série de otimizações, depois de mudanças no caminho de toda requisição (Netty, segurança, despacho, sessão, GSP, tags, consultas) e ao atualizar Groovy, Netty, Hibernate ou o JDK.
 
 ## Linha do tempo
@@ -51,7 +52,7 @@ Números do HEAD de cada rodada. Compare só a tendência; a diferença entre ro
 | Até responder, com a JVM (s) | 16,7 · 18,8 | 10,6 · 8,4 | 8,2 · 9,1 | 8,7 · 8,0 | 8,5 · 7,9 |
 | RSS no fim (MB) | 1.464 · 1.436 | 1.329 · 1.347 | 2.081 · 1.619 | 1.567 · 1.488 | 2.001 · 1.625 |
 
-`/usuario/index` do sample-app com login (base, HEAD, HEAD, base):
+`/usuario/index` do sample-app com login (base, HEAD, HEAD, base). Atenção: as linhas com 1 conexão foram medidas antes do aquecimento com 64 conexões (ver acima) e incluem o JIT compilando; servem só para comparar base e HEAD da mesma rodada:
 
 | | Conexões | req/s | p50 (ms) | CPU ms/req |
 |---|---:|---:|---:|---:|

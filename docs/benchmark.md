@@ -330,7 +330,29 @@ A/B alternado (base `6a545be`, HEAD, HEAD, base), `/usuario/index` com login, 30
 | CPU ms/req com 64 conexões | 2,00 · 1,92 | 1,69 · 1,67 |
 | p50 com 1 conexão | 5,35 · 5,03 ms | 5,35 · 5,10 ms |
 
-Com 64 conexões, +20% de vazão e −14% de CPU por requisição. Com 1 conexão, a diferença ficou dentro do ruído. A página tem uma tabela com um `g:link` por linha mais a paginação, e o sample-app tem poucos mapeamentos; uma app com centenas de mapeamentos ganha mais com os índices.
+Com 64 conexões, +20% de vazão e −14% de CPU por requisição. Com 1 conexão, a diferença ficou dentro do ruído, mas essa medição ainda pegava o JIT compilando (ver a seção seguinte). A página tem uma tabela com um `g:link` por linha mais a paginação, e o sample-app tem poucos mapeamentos; uma app com centenas de mapeamentos ganha mais com os índices.
+
+## Chamadas geradas pela GSP com `invokestatic` (2026-11-27)
+
+O perfil mostrou ~6% das amostras no runtime do Groovy chamado direto do código das GSPs compiladas, e parte disso em `ClosureMetaClass.invokeMethod`. Dentro do corpo de uma tag, que é uma closure, cada `printText(1)` ou `invokeTag(...)` gerado passava pela resolução owner/delegate da closure.
+
+- **O que mudou:** o `GspCompiler` passa a gerar chamadas estáticas com a página como argumento: `GspPage.__text(this, 1)`, `__expr`, `__tag`, `__set` e `__capture`. Dentro de uma closure, o `this` do Groovy é a própria página.
+- **Ligação direta:** o `GspDirectCalls`, um customizador da compilação, põe o `methodTarget` nessas chamadas. Com isso, o Groovy dinâmico emite `invokestatic` em vez de um call site `invokedynamic` (o `GspTest` confere no bytecode).
+- **O que continua dinâmico:** as expressões do usuário (`${u.nome}`, `params.q`).
+
+A/B contra `18ed435`, `/usuario/index` com login:
+
+| | base | HEAD |
+|---|---:|---:|
+| req/s com 64 conexões (base, HEAD, HEAD, base) | 2.985 · 2.736 | 3.336 · 3.248 |
+| CPU ms/req com 64 conexões | 1,78 · 1,84 | 1,68 · 1,76 |
+| req/s com 1 conexão, aquecida (HEAD, base, base, HEAD) | 380 · 402 | 522 · 493 |
+| p50 com 1 conexão, aquecida | 2,30 · 2,39 ms | 1,74 · 1,93 ms |
+| CPU ms/req com 1 conexão, aquecida | 3,97 · 3,34 | 2,34 · 2,52 |
+
+Com 1 conexão, a página ficou de 20% a 30% mais rápida; com 64 conexões, +15% de vazão.
+
+A primeira rodada mediu 1 conexão logo depois de 30 s de aquecimento com 1 conexão e deu o contrário: o HEAD com 6,0 ms de p50 e a base com 4,7 a 5,2 ms. Com 60 s de aquecimento, os dois ficam em ~2 ms, então aquela medição ainda pegava o JIT compilando. O `run-logado.sh` agora aquece com 64 conexões antes de medir (`JIT=60`). Fica a indicação de que o HEAD demora um pouco mais a aquecer; em produção, depois do primeiro minuto, não faz diferença.
 
 ## Próximos alvos (pendentes, ver [roadmap](roadmap.md#pendente-próximos-passos-fase-7))
 
@@ -360,6 +382,6 @@ Com 64 conexões, +20% de vazão e −14% de CPU por requisição. Com 1 conexã
 Alvos, por ordem de ganho esperado:
 
 1. ~~**Rotas em `@CompileStatic` e indexadas**~~: feito (ver acima).
-2. **Call sites das GSPs compiladas:** ~5%, mais ~2,8% do motor. A expressão `${...}` da view é código da app e fica dinâmica. Os auxiliares que o compilador gera em volta dela (saída, escape, `invokeTag`) podem ser chamadas estáticas, como no `TraitInitTransformation`.
+2. ~~**Call sites das GSPs compiladas**~~: as chamadas geradas foram feitas (ver acima); o motor (`GspTemplateEngine.render`, `GspViews.render`) segue. Antes: ~5%, mais ~2,8% do motor. A expressão `${...}` da view é código da app e fica dinâmica. Os auxiliares que o compilador gera em volta dela (saída, escape, `invokeTag`) podem ser chamadas estáticas, como no `TraitInitTransformation`.
 3. **O restante do framework no caminho de toda requisição:** `MessageSource.format`, `HeaderMap`, `Metrics`, os auxiliares dos interceptors e do `SecurityFilter`, `TagLibRegistry.callTag` e `QueryRunner`. São 0,4% a 0,7% cada, ~5% somados.
 4. **Banco:** 23% das amostras com 4 consultas por página no H2 em memória. Com o filtro `_tenantId`, o Hibernate 7.4 não guarda a tradução para SQL (ver acima). Investigar se dá para manter o plano com o filtro, ou trocá-lo por uma restrição no próprio HQL gerado.

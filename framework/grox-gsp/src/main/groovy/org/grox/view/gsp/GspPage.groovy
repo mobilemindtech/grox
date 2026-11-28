@@ -72,6 +72,36 @@ abstract class GspPage extends Script {
         rc.tags.invoke(namespace, name, attrs, body == null ? null : bodyFunction(body), rc)
     }
 
+    // Chamadas do código gerado ({@link GspCompiler}): estáticas, com a página como argumento. Dentro do corpo de
+    // uma tag (uma closure), {@code printText(1)} passaria pela resolução owner/delegate da closure a cada chamada;
+    // {@code GspPage.__text(this, 1)} não (o {@code this} de uma closure é a página), e o {@link GspDirectCalls}
+    // ainda a liga com invokestatic, sem call site dinâmico.
+
+    @CompileStatic
+    static void __text(GspPage page, int index) {
+        page.rc.out.write(page.texts[index])
+    }
+
+    @CompileStatic
+    static void __expr(GspPage page, Object value) {
+        page.printEncoded(value)
+    }
+
+    @CompileStatic
+    static void __tag(GspPage page, String namespace, String name, Map attrs, Closure body) {
+        page.invokeTag(namespace, name, attrs, body)
+    }
+
+    @CompileStatic
+    static void __set(GspPage page, String name, Object value) {
+        page.rc.pageScope.setVariable(name, value)
+    }
+
+    @CompileStatic
+    static SafeHtml __capture(GspPage page, Closure body) {
+        page.rc.capture(body)
+    }
+
     /**
      * Corpo da tag: {@code body()} / {@code body(item)} / {@code body([var: valor])}.
      * Não privado: a página gerada é subclasse, e métodos privados chamados de closures

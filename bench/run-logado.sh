@@ -2,7 +2,9 @@
 # Mede páginas que exigem login: sobe o sample-app empacotado, faz login por formulário (sessão, sem o bcrypt
 # do Basic a cada requisição) e roda o LoadGen com o cookie. Mostra também o tempo de CPU do processo por
 # requisição, menos sensível a outros processos na máquina que a vazão.
-# uso: bench/run-logado.sh rotulo /url "<JAVA_OPTS extras>"   (CONN="1 64" SECS=10 WARM=30 DIST=diretório do installDist)
+# uso: bench/run-logado.sh rotulo /url "<JAVA_OPTS extras>"   (CONN="1 64" SECS=10 WARM=30 JIT=60 DIST=diretório do installDist)
+# JIT: aquecimento inicial com 64 conexões, antes de tudo. Sem ele, a primeira medição (1 conexão) ainda pega o JIT
+# compilando: o p50 da /usuario/index dava 5 a 6 ms em vez de ~2 ms.
 # antes: ./gradlew :sample-app:installDist :bench:installDist
 cd "$(dirname "$0")/.."
 SP=${TMPDIR:-/tmp}
@@ -20,6 +22,7 @@ test "$(curl -s -o /dev/null -w '%{http_code}' -H "Cookie: $COOKIE" localhost:80
 JPID=$(pgrep -f "$D/lib" | head -1)
 cpu() { awk '{print $14+$15}' /proc/$JPID/stat; }
 TCK=$(getconf CLK_TCK)
+bench/build/install/bench/bin/bench "http://localhost:8080$URL" 64 ${JIT:-60} 0 "Cookie: $COOKIE" > /dev/null
 for c in ${CONN:-1 64}; do
   bench/build/install/bench/bin/bench "http://localhost:8080$URL" $c ${WARM:-30} 0 "Cookie: $COOKIE" > /dev/null
   C0=$(cpu)

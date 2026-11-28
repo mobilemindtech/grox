@@ -64,6 +64,7 @@ class GspTemplateEngine {
         def config = new CompilerConfiguration()
         config.scriptBaseClass = GspPage.name
         config.addCompilationCustomizers(new ImportCustomizer().addImports((['org.grox.http.SafeHtml'] + imports) as String[]))
+        config.addCompilationCustomizers(new GspDirectCalls())
         config
     }
 

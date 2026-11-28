@@ -11,6 +11,8 @@ class GspCompiler {
 
     static final Set<String> SYNTAX_TAGS = ['if', 'elseif', 'else', 'unless', 'while', 'each', 'set'] as Set
     static final String LINE_MARK = '//@gsp:'
+    /** Receptor das chamadas geradas: métodos estáticos do {@link GspPage} (ver {@link GspDirectCalls}). */
+    static final String PAGE = 'org.grox.view.gsp.GspPage'
 
     static class Result {
         String source
@@ -45,7 +47,7 @@ class GspCompiler {
             if (n instanceof TextNode && isIgnorableBeforeElse(nodes, i)) continue
             switch (n) {
                 case TextNode -> text((TextNode) n)
-                case ExprNode -> emit("printEncoded(${wrap(((ExprNode) n).code)})", n.line)
+                case ExprNode -> emit("${PAGE}.__expr(this, ${wrap(((ExprNode) n).code)})", n.line)
                 case ScriptletNode -> scriptlet((ScriptletNode) n)
                 case DirectiveNode -> directive((DirectiveNode) n)
                 case TagStartNode -> tagStart((TagStartNode) n, previousSignificant(nodes, i))
@@ -85,7 +87,7 @@ class GspCompiler {
 
     private void text(TextNode n) {
         texts << n.text
-        emit("printText(${texts.size() - 1})", n.line)
+        emit("${PAGE}.__text(this, ${texts.size() - 1})", n.line)
     }
 
     private void scriptlet(ScriptletNode n) {
@@ -103,7 +105,7 @@ class GspCompiler {
             syntaxTag(t, previous)
             return
         }
-        String call = "invokeTag(${quote(t.namespace)}, ${quote(t.name)}, ${attrsMap(t)}"
+        String call = "${PAGE}.__tag(this, ${quote(t.namespace)}, ${quote(t.name)}, ${attrsMap(t)}"
         if (t.selfClosing) {
             emit(call + ', null)', t.line)
         } else {
@@ -141,10 +143,10 @@ class GspCompiler {
                 String var = t.attrs.var?.text
                 if (!var) throw new GspException(view, t.line, '<g:set> exige o atributo var')
                 if (t.attrs.containsKey('value') || t.selfClosing) {
-                    emit("setPageVariable(${quote(var)}, ${t.attrs.value ? expr(t.attrs.value) : 'null'})", t.line)
+                    emit("${PAGE}.__set(this, ${quote(var)}, ${t.attrs.value ? expr(t.attrs.value) : 'null'})", t.line)
                     if (!t.selfClosing) stack.push(new Frame(tag: t, close: ''))
                 } else {
-                    emit("setPageVariable(${quote(var)}, captureBody({ ->", t.line)
+                    emit("${PAGE}.__set(this, ${quote(var)}, ${PAGE}.__capture(this, { ->", t.line)
                     stack.push(new Frame(tag: t, close: '}))'))
                 }
             }

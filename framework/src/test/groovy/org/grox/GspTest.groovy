@@ -367,4 +367,42 @@ class GspTest {
         String fragmento = org.grox.view.html.HtmlRender.render({ div 'só o corpo' }, null, views, [:], 'simples')
         assert fragmento.contains('[<div>só o corpo</div>]')
     }
+
+    @Test
+    void 'chamadas geradas pela GSP sao invokestatic, inclusive no corpo das tags'() {
+        String gsp = 'a ${x} <g:link action="y">b ${x}</g:link><g:set var="v">c</g:set><g:set var="w" value="${1}"/>'
+        def nodes = org.grox.view.gsp.GspParser.parse(gsp, ['g'] as Set)
+        String source = org.grox.view.gsp.GspCompiler.compile(nodes, 'teste').source
+        File dir = File.createTempDir()
+        def config = org.grox.view.gsp.GspTemplateEngine.compilerConfiguration()
+        config.targetDirectory = dir
+        def unit = new org.codehaus.groovy.control.CompilationUnit(config, null, new GroovyClassLoader(getClass().classLoader, config))
+        unit.addSource('gsp_teste.groovy', source)
+        unit.compile()
+        Map<String, Integer> diretas = [:].withDefault { 0 }
+        int indyGerado = 0
+        dir.eachFileRecurse { File f ->
+            if (!f.name.endsWith('.class')) return
+            new groovyjarjarasm.asm.ClassReader(f.bytes).accept(new groovyjarjarasm.asm.ClassVisitor(groovyjarjarasm.asm.Opcodes.ASM9) {
+                @Override
+                groovyjarjarasm.asm.MethodVisitor visitMethod(int access, String name, String desc, String sig, String[] ex) {
+                    new groovyjarjarasm.asm.MethodVisitor(groovyjarjarasm.asm.Opcodes.ASM9) {
+                        @Override
+                        void visitMethodInsn(int op, String owner, String n, String d, boolean itf) {
+                            if (op == groovyjarjarasm.asm.Opcodes.INVOKESTATIC && owner == 'org/grox/view/gsp/GspPage') diretas[n]++
+                        }
+
+                        @Override
+                        void visitInvokeDynamicInsn(String n, String d, groovyjarjarasm.asm.Handle h, Object... args) {
+                            if (args.any { it.toString().startsWith('__') } || n.startsWith('__')) indyGerado++
+                        }
+                    }
+                }
+            }, 0)
+        }
+        dir.deleteDir()
+        // o __text e o __expr do corpo do g:link ficam na closure: também diretos
+        assert diretas.__text >= 3 && diretas.__expr == 2 && diretas.__tag == 1 && diretas.__set == 2 && diretas.__capture == 1
+        assert indyGerado == 0
+    }
 }
